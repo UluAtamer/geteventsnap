@@ -2,36 +2,15 @@
 
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/db/client'
 import styles from './AuthForm.module.css'
 
 type AuthFormProps = {
   mode: 'login' | 'signup'
+  preview?: boolean
 }
 
-function getTurkishError(message: string) {
-  const normalizedMessage = message.toLowerCase()
-
-  if (normalizedMessage.includes('invalid login credentials')) {
-    return 'E-posta adresi veya şifre hatalı.'
-  }
-  if (normalizedMessage.includes('email not confirmed')) {
-    return 'Devam etmek için e-posta adresinizi doğrulayın.'
-  }
-  if (normalizedMessage.includes('user already registered')) {
-    return 'Bu e-posta adresiyle zaten bir hesap var. Giriş yapmayı deneyin.'
-  }
-  if (normalizedMessage.includes('password') && normalizedMessage.includes('least')) {
-    return 'Şifreniz en az 6 karakter olmalı.'
-  }
-  if (normalizedMessage.includes('rate limit')) {
-    return 'Çok fazla deneme yaptınız. Birkaç dakika sonra tekrar deneyin.'
-  }
-
-  return 'İşlem tamamlanamadı. Bilgilerinizi kontrol edip tekrar deneyin.'
-}
-
-export default function AuthForm({ mode }: AuthFormProps) {
+export default function AuthForm({ mode, preview = false }: AuthFormProps) {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -42,24 +21,22 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (preview) return
     setError('')
     setStatus('')
     setIsSubmitting(true)
 
     try {
-      const supabase = createClient()
+      const database = createClient()
 
       if (isSignup) {
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        const { data, error: signUpError } = await database.auth.signUp({
           email,
           password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
-          },
         })
 
         if (signUpError) {
-          setError(getTurkishError(signUpError.message))
+          setError(signUpError.message)
           return
         }
 
@@ -69,50 +46,21 @@ export default function AuthForm({ mode }: AuthFormProps) {
           return
         }
 
-        setStatus('Hesabınızı tamamlamak için e-posta adresinize gönderdiğimiz doğrulama bağlantısına tıklayın.')
+        setStatus('Hesabınız oluşturuldu. Giriş yapabilirsiniz.')
         return
       }
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      const { error: signInError } = await database.auth.signInWithPassword({ email, password })
 
       if (signInError) {
-        setError(getTurkishError(signInError.message))
+        setError(signInError.message)
         return
       }
 
       router.replace('/dashboard')
       router.refresh()
     } catch {
-      setError('Supabase bağlantısı kurulamadı. Kurulum ayarlarınızı kontrol edin.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  async function handlePasswordReset() {
-    setError('')
-    setStatus('')
-
-    if (!email.trim()) {
-      setError('Parola yenileme bağlantısı için e-posta adresinizi yazın.')
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const supabase = createClient()
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/auth/callback?next=/sifre-yenile`,
-      })
-
-      if (resetError) {
-        setError(getTurkishError(resetError.message))
-        return
-      }
-
-      setStatus('E-posta adresiniz kayıtlıysa parola yenileme bağlantısı gönderildi. Gelen kutunuzu ve gereksiz posta klasörünü kontrol edin.')
-    } catch {
-      setError('Parola yenileme e-postası gönderilemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin.')
+      setError('Giriş işlemi tamamlanamadı. Lütfen tekrar deneyin.')
     } finally {
       setIsSubmitting(false)
     }
@@ -120,6 +68,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
+      {preview && <p className={styles.status} role="status">Arayüz önizlemesi. Giriş ve kayıt işlemleri canlı ortamda test edilecek.</p>}
       <label className={styles.label} htmlFor={`${mode}-email`}>E-posta adresi</label>
       <input
         className={styles.input}
@@ -130,6 +79,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         required
+        disabled={preview}
       />
       <label className={styles.label} htmlFor={`${mode}-password`}>Şifre</label>
       <input
@@ -137,22 +87,19 @@ export default function AuthForm({ mode }: AuthFormProps) {
         id={`${mode}-password`}
         type="password"
         autoComplete={isSignup ? 'new-password' : 'current-password'}
-        placeholder="En az 6 karakter"
-        minLength={6}
+        placeholder="En az 12 karakter"
+        minLength={12}
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         required
+        disabled={preview}
       />
       {error && <p className={styles.error} role="alert">{error}</p>}
       {status && <p className={styles.status} role="status">{status}</p>}
-      <button className={styles.button} type="submit" disabled={isSubmitting}>
+      <button className={styles.button} type="submit" disabled={isSubmitting || preview}>
         {isSubmitting ? 'Lütfen bekleyin…' : isSignup ? 'Hesap oluştur' : 'Giriş yap'}
       </button>
-      {!isSignup && (
-        <button className={styles.resetLink} type="button" onClick={handlePasswordReset} disabled={isSubmitting}>
-          Parolamı unuttum
-        </button>
-      )}
+      {!isSignup && <p className={styles.status}>Parolanızı unuttuysanız sunucu yöneticisinden hesap kurtarma talep edin.</p>}
     </form>
   )
 }

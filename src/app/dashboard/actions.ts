@@ -3,7 +3,8 @@
 import { randomBytes } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { isOwnedCover } from '@/lib/cover-url'
+import { createClient } from '@/lib/db/server'
 
 export type CreateEventResult = {
   error?: string
@@ -12,30 +13,9 @@ export type CreateEventResult = {
 
 const eventIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function slugify(value: string) {
-  const transliteration: Record<string, string> = {
-    ç: 'c',
-    ğ: 'g',
-    ı: 'i',
-    ö: 'o',
-    ş: 's',
-    ü: 'u',
-  }
-
-  return value
-    .toLocaleLowerCase('tr-TR')
-    .replace(/[çğıöşü]/g, (character) => transliteration[character] ?? character)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 55)
-    .replace(/-+$/g, '')
-}
-
 export async function createEvent(formData: FormData): Promise<CreateEventResult> {
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const database = await createClient()
+  const { data: { user }, error: userError } = await database.auth.getUser()
 
   if (userError || !user) {
     return { error: 'Oturumunuz sona ermiş. Lütfen yeniden giriş yapın.' }
@@ -74,37 +54,13 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
     return { error: 'Lütfen geçerli bir etkinlik saati girin.' }
   }
 
-  if (coverImageUrl) {
-    const sampleCovers = ['/covers/dugun.svg', '/covers/arkadas.svg', '/covers/parti.svg', '/covers/diger.svg']
-    if (!sampleCovers.includes(coverImageUrl)) {
-      try {
-        const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        if (!projectUrl) {
-          throw new Error('Supabase bağlantı ayarı eksik.')
-        }
-        const parsedUrl = new URL(coverImageUrl)
-        const expectedUrl = new URL(projectUrl)
-        const ownerCoverPrefix = `/storage/v1/object/public/event-covers/${user.id}/`
-        if (parsedUrl.protocol !== 'https:' ||
-          parsedUrl.origin !== expectedUrl.origin ||
-          !parsedUrl.pathname.startsWith(ownerCoverPrefix) ||
-          parsedUrl.search) {
-          return { error: 'Kapak görseli etkinlik için telefonunuzdan yüklenmelidir.' }
-        }
-      } catch {
-        return { error: 'Kapak görseli yüklenemedi. Lütfen tekrar seçin.' }
-      }
-    }
+  if (coverImageUrl && !isOwnedCover(coverImageUrl, user.id)) {
+    return { error: 'Kapak görseli bu hesaba ait değil.' }
   }
 
   const safeCoverImageUrl = coverImageUrl || `/covers/${eventType}.svg`
-  const baseSlug = slugify(title)
-  if (!baseSlug) {
-    return { error: 'Etkinlik adı bağlantı oluşturmak için uygun değil.' }
-  }
-
-  const slug = `${baseSlug}-${randomBytes(4).toString('hex')}`
-  const { data, error } = await supabase
+  const slug = randomBytes(24).toString('hex')
+  const { data, error } = await database
     .from('events')
     .insert({
       owner_id: user.id,
@@ -122,9 +78,6 @@ export async function createEvent(formData: FormData): Promise<CreateEventResult
 
   if (error) {
     console.error('Etkinlik oluşturulamadı:', error)
-    if (error.code === '42P01' || error.code === 'PGRST205') {
-      return { error: 'Etkinlik veritabanı henüz hazırlanmadı. README dosyasındaki ikinci veritabanı adımını tamamlayın.' }
-    }
     return { error: 'Etkinlik oluşturulamadı. Lütfen bilgileri kontrol edip tekrar deneyin.' }
   }
 
@@ -139,13 +92,13 @@ export async function deleteOwnedEvent(formData: FormData) {
     redirect('/dashboard?panel=event_delete_confirmation')
   }
 
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const database = await createClient()
+  const { data: { user }, error: userError } = await database.auth.getUser()
   if (userError || !user) {
     redirect('/giris')
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await database
     .from('events')
     .delete()
     .eq('id', eventId)
@@ -164,40 +117,6 @@ export async function deleteOwnedEvent(formData: FormData) {
   revalidatePath('/dashboard')
   revalidatePath(`/e/${data.slug}`)
   redirect('/dashboard?panel=event_deleted')
-}
-
-export async function updateDatingEnabled(formData: FormData) {
-  const eventId = String(formData.get('eventId') ?? '')
-  const enabledValue = String(formData.get('enabled') ?? '')
-  if (!eventIdPattern.test(eventId) ||
-    !['true', 'false'].includes(enabledValue)) {
-    redirect('/dashboard?panel=settings_invalid')
-  }
-
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError || !user) {
-    redirect('/giris')
-  }
-
-  const { data, error } = await supabase
-    .from('events')
-    .update({ dating_enabled: enabledValue === 'true' })
-    .eq('id', eventId)
-    .eq('owner_id', user.id)
-    .select('id')
-    .maybeSingle()
-
-  if (error) {
-    console.error('Tanışma ayarı kaydedilemedi:', error)
-    redirect('/dashboard?panel=settings_save_failed')
-  }
-  if (!data) {
-    redirect('/dashboard?panel=event_not_found')
-  }
-
-  revalidatePath('/dashboard')
-  redirect(`/dashboard?panel=dating_${enabledValue}`)
 }
 
 export async function updateOwnedEvent(formData: FormData): Promise<CreateEventResult> {
@@ -219,33 +138,17 @@ export async function updateOwnedEvent(formData: FormData): Promise<CreateEventR
     return { error: 'Etkinlik tarihi, saati, açıklaması veya arka plan görseli geçerli değil.' }
   }
 
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const database = await createClient()
+  const { data: { user }, error: userError } = await database.auth.getUser()
   if (userError || !user) {
     return { error: 'Oturumunuz sona ermiş. Lütfen yeniden giriş yapın.' }
   }
 
-  const sampleCovers = ['/covers/dugun.svg', '/covers/arkadas.svg', '/covers/parti.svg', '/covers/diger.svg']
-  if (!sampleCovers.includes(coverImageUrl)) {
-    try {
-      const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      if (!projectUrl) throw new Error('Supabase bağlantı ayarı eksik.')
-      const parsedUrl = new URL(coverImageUrl)
-      const expectedUrl = new URL(projectUrl)
-      const ownerCoverPrefix = `/storage/v1/object/public/event-covers/${user.id}/`
-      if (parsedUrl.protocol !== 'https:' ||
-        parsedUrl.origin !== expectedUrl.origin ||
-        !parsedUrl.pathname.startsWith(ownerCoverPrefix) ||
-        parsedUrl.search ||
-        parsedUrl.hash) {
-        return { error: 'Arka plan fotoğrafı bu hesaba ait değil. Lütfen yeniden seçin.' }
-      }
-    } catch {
-      return { error: 'Arka plan fotoğrafı geçerli değil. Lütfen yeniden seçin.' }
-    }
+  if (!isOwnedCover(coverImageUrl, user.id)) {
+    return { error: 'Kapak görseli bu hesaba ait değil.' }
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await database
     .from('events')
     .update({
       event_date: eventDate,
@@ -273,8 +176,8 @@ export async function updateOwnedEvent(formData: FormData): Promise<CreateEventR
 }
 
 export async function signOut() {
-  const supabase = await createClient()
-  const { error } = await supabase.auth.signOut()
+  const database = await createClient()
+  const { error } = await database.auth.signOut()
 
   if (error) {
     throw new Error('Çıkış yapılamadı. Lütfen tekrar deneyin.')

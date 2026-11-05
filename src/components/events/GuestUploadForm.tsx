@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  getEventUploadWindow,
   type UploadWindowState,
 } from '@/lib/event-upload-window'
 import styles from './GuestUploadForm.module.css'
@@ -24,7 +23,7 @@ type UploadItem = {
 
 type Props = {
   slug: string
-  eventDate: string
+  initialWindowState: UploadWindowState
   limits: GuestUploadLimits
 }
 
@@ -93,29 +92,13 @@ function getGuestId() {
 }
 
 function persistGuestIdsCookie(guestIds: string[]) {
-  const isGetEventSnapDomain = window.location.hostname === 'geteventsnap.com' ||
-    window.location.hostname.endsWith('.geteventsnap.com')
-  const domain = isGetEventSnapDomain ? '; Domain=.geteventsnap.com' : ''
   const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-  document.cookie = `${GUEST_ID_COOKIE_KEY}=${encodeURIComponent(JSON.stringify(guestIds))}; Max-Age=31536000; Path=/; SameSite=Lax${domain}${secure}`
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('tr-TR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'Europe/Istanbul',
-  }).format(new Date(`${value}T12:00:00+03:00`))
+  document.cookie = `${GUEST_ID_COOKIE_KEY}=${encodeURIComponent(JSON.stringify(guestIds))}; Max-Age=31536000; Path=/; SameSite=Lax${secure}`
 }
 
 function readableSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
   return `${(bytes / (1024 * 1024)).toFixed(bytes >= 100 * 1024 * 1024 ? 0 : 1)} MB`
-}
-
-function rangeEnd(response: Response) {
-  return rangeOffset(response.headers.get('range'))
 }
 
 function rangeOffset(range: string | null) {
@@ -246,10 +229,6 @@ async function uploadResumable(
   throw new Error('Dosya yüklemesi tamamlanamadı. Tekrar deneyin.')
 }
 
-function currentWindowState(eventDate: string, now = new Date()): UploadWindowState {
-  return getEventUploadWindow(eventDate, now).state
-}
-
 type OwnUploadItem = {
   id: string
   name: string
@@ -372,9 +351,9 @@ function OwnUploads({ slug, refreshKey }: { slug: string, refreshKey: number }) 
     </section>
   )
 }
-export default function GuestUploadForm({ slug, eventDate, limits }: Props) {
-  const [windowState, setWindowState] = useState<UploadWindowState>(() => currentWindowState(eventDate))
-  const [anonymous, setAnonymous] = useState(false)
+export default function GuestUploadForm({ slug, initialWindowState, limits }: Props) {
+  const [windowState, setWindowState] = useState<UploadWindowState>(initialWindowState)
+  const [anonymous, setAnonymous] = useState(true)
   const [name, setName] = useState('')
   const [surname, setSurname] = useState('')
   const [note, setNote] = useState('')
@@ -385,11 +364,17 @@ export default function GuestUploadForm({ slug, eventDate, limits }: Props) {
   const cameraInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const refreshWindow = () => setWindowState(currentWindowState(eventDate))
-    refreshWindow()
+    let active = true
+    const refreshWindow = async () => {
+      try {
+        const response = await fetch(`/api/events/${encodeURIComponent(slug)}/uploads/status`, { cache: 'no-store' })
+        const data = await response.json()
+        if (active && ['open', 'closed', 'not_started'].includes(data.state)) setWindowState(data.state)
+      } catch { /* The upload API still enforces the window. */ }
+    }
     const timer = window.setInterval(refreshWindow, 30_000)
-    return () => window.clearInterval(timer)
-  }, [eventDate])
+    return () => { active = false; window.clearInterval(timer) }
+  }, [slug])
 
   function addFiles(selected: FileList | null) {
     if (!selected?.length) return
@@ -508,7 +493,6 @@ export default function GuestUploadForm({ slug, eventDate, limits }: Props) {
   const waitingForStart = windowState === 'not_started'
   const windowClosed = windowState === 'closed'
   const canUpload = windowState === 'open'
-  const dateWindow = getEventUploadWindow(eventDate)
   const doneCount = files.filter((item) => item.status === 'done').length
 
   return (
@@ -521,9 +505,6 @@ export default function GuestUploadForm({ slug, eventDate, limits }: Props) {
         </div>
       </div>
 
-      <p className={styles.windowDates}>
-        Yükleme dönemi: {formatDate(dateWindow.firstUploadDate)} – {formatDate(dateWindow.lastUploadDate)}
-      </p>
 
       {waitingForStart && (
         <p className={styles.notice} role="status">

@@ -1,21 +1,21 @@
 import 'server-only'
 
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 
-export function getAdminEmail() {
-  return (process.env.ADMIN_EMAIL || 'ahmetcanatamer@gmail.com').trim().toLowerCase()
+export function getAdminUserId() {
+  return (process.env.ADMIN_USER_ID || '').trim()
 }
 
 export async function requireAdmin() {
-  const supabase = await createClient()
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const database = await createClient()
+  const { data: { user }, error } = await database.auth.getUser()
 
   if (error || !user) {
     redirect('/giris')
   }
 
-  if (user.email?.toLowerCase() !== getAdminEmail()) {
+  if (user.id !== getAdminUserId()) {
     redirect('/dashboard')
   }
 

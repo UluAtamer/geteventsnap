@@ -4,7 +4,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { isIP } from 'node:net'
 import { NextResponse } from 'next/server'
 import { getEventUploadWindow } from '@/lib/event-upload-window'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/db/admin'
 import {
   decryptGoogleRefreshToken,
   getGoogleDriveOAuthConfig,
@@ -176,7 +176,7 @@ export async function findUploadEvent(admin: AdminClient, slug: string): Promise
   if (!data) {
     throw new GuestUploadError('Etkinlik bulunamadı.', 404, 'event_not_found')
   }
-  return data
+  return data as UploadEvent
 }
 
 async function parseGoogleJson(response: Response): Promise<JsonObject> {

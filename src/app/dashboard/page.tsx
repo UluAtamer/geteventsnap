@@ -2,17 +2,15 @@ import BrandLogo from '@/components/brand/BrandLogo'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import CreateEventForm from '@/components/events/CreateEventForm'
-import DatingReportsManager from '@/components/events/DatingReportsManager'
 import EventShareCard from '@/components/events/EventShareCard'
 import EditEventForm from '@/components/events/EditEventForm'
-import { getMapDirectionsUrl } from '@/lib/event-location'
 import { getEventUploadWindow } from '@/lib/event-upload-window'
 import { getMemberCode } from '@/lib/member-code'
-import { getAdminEmail } from '@/lib/admin-auth'
+import { getAdminUserId } from '@/lib/admin-auth'
 import { hasGoogleDriveServerConfig } from '@/lib/google-drive'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { deleteOwnedEvent, signOut, updateDatingEnabled } from './actions'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/db/admin'
+import { deleteOwnedEvent, signOut } from './actions'
+import { createClient } from '@/lib/db/server'
 import styles from './dashboard.module.css'
 
 type DashboardPageProps = {
@@ -36,7 +34,6 @@ const driveMessages: Record<string, { text: string; success?: boolean }> = {
   connected: { text: 'Google Drive bağlandı. Etkinlik anıları için klasörünüz hazır.', success: true },
   already_connected: { text: 'Bu etkinliğin Google Drive klasörü zaten bağlı.' },
   setup_required: { text: 'Google Drive’ı bağlamadan önce Google Cloud ve sunucu anahtarı ayarlarını tamamlayın. Kurulum adımları README dosyasında.' },
-  migration_required: { text: 'Google Drive veritabanı kurulumu eksik. README içindeki 202610040005 migration adımını tamamlayın.' },
   connection_check_failed: { text: 'Drive bağlantı durumu okunamadı. Lütfen ayarları kontrol edip sayfayı yenileyin.' },
   cancelled: { text: 'Google Drive bağlantısı iptal edildi; hiçbir Drive erişimi kaydedilmedi.' },
   access_denied: { text: 'Google Drive erişimi reddedildi. Uygulama Google Cloud’da Testing durumundaysa Audience bölümünden Publish app ile herkese açın. Test kullanıcıları kısıtlaması kalksa da kullanıcıların Google izin ekranında onay vermesi gerekir. Google Workspace hesabı kullanıyorsanız kuruluş yöneticiniz ayrıca erişimi engelliyor olabilir.' },
@@ -58,7 +55,6 @@ type EventRecord = {
   slug: string
   welcome_message: string
   cover_image_url: string | null
-  dating_enabled: boolean
 }
 
 type UploadStats = {
@@ -76,40 +72,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     event_deleted: 'Etkinlik ve uygulamadaki ilişkili kayıtları silindi. Google Drive’daki dosyalar etkilenmedi.',
     event_delete_confirmation: 'Silmek için onay alanına ETKİNLİĞİ SİL yazın.',
     event_delete_failed: 'Etkinlik silinemedi. Sunucu kayıtlarında hata ayrıntısı bulunuyor; lütfen tekrar deneyin.',
-    dating_true: 'Tanışma ayarı açıldı. Misafirler yalnızca etkinlik günü profillerini oluşturabilir.',
-    dating_false: 'Tanışma ayarı kapatıldı.',
     settings_invalid: 'Etkinlik ayarı geçerli değildi. Lütfen panelden tekrar deneyin.',
-    settings_save_failed: 'Tanışma ayarı kaydedilemedi. Lütfen tekrar deneyin.',
     event_updated: 'Etkinlik bilgileri güncellendi.',
     event_update_invalid: 'Etkinlik tarihi, saati veya açıklaması geçerli değil. Alanları kontrol edip tekrar deneyin.',
     event_update_failed: 'Etkinlik bilgileri kaydedilemedi. Lütfen tekrar deneyin.',
     event_not_found: 'Etkinlik bulunamadı veya bu etkinlik size ait değil.',
   }
   const panelMessage = panelMessageKey ? panelMessages[panelMessageKey] : undefined
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const database = await createClient()
+  const { data: { user } } = await database.auth.getUser()
 
   if (!user) {
     redirect('/giris')
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await database
     .from('events')
-    .select('id, title, event_date, event_time, event_address, event_type, slug, welcome_message, cover_image_url, dating_enabled')
+    .select('id, title, event_date, event_time, event_address, event_type, slug, welcome_message, cover_image_url')
     .order('created_at', { ascending: false })
 
   const events = (data ?? []) as EventRecord[]
-  const hasTableError = Boolean(error && (error.code === '42P01' || error.code === 'PGRST205'))
   let driveConnections: DriveConnection[] = []
   let driveConnectionsError = ''
   let uploadStats: UploadStats[] = []
   let uploadStatsError = ''
 
-  if (error && !hasTableError) {
+  if (error) {
     console.error('Etkinlik listesi alınamadı:', error)
   }
 
-  if (events.length > 0 && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (events.length > 0) {
     const admin = createAdminClient()
     const { data: connections, error: driveError } = await admin
       .from('event_drive_connections')
@@ -119,19 +111,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
     if (driveError) {
       console.error('Google Drive bağlantı durumu alınamadı:', driveError)
-      driveConnectionsError = driveError.code === '42P01' ? 'migration' : 'query'
+      driveConnectionsError = 'query'
     } else {
-      driveConnections = connections ?? []
+      driveConnections = (connections ?? []) as DriveConnection[]
     }
   }
 
   if (events.length > 0) {
-    const { data: stats, error: statsError } = await supabase.rpc('get_owner_event_upload_stats')
+    const { data: stats, error: statsError } = await database.rpc('get_owner_event_upload_stats')
     if (statsError) {
       console.error('Etkinlik yükleme sayaçları alınamadı:', statsError)
-      uploadStatsError = statsError.code === 'PGRST202' || statsError.code === '42883'
-        ? 'Yükleme sayaçları için 202610040007 migration adımı tamamlanmalı.'
-        : 'Yükleme sayaçları şu anda alınamıyor. Lütfen sayfayı yenileyin.'
+      uploadStatsError = 'Yükleme sayaçları şu anda alınamıyor. Lütfen sayfayı yenileyin.'
     } else {
       uploadStats = (stats ?? []) as UploadStats[]
     }
@@ -144,7 +134,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <BrandLogo className={styles.brandLogo} />
         </Link>
         <div className={styles.headerActions}>
-          {user.email?.toLowerCase() === getAdminEmail() && (
+          <Link href="/sifre-yenile">Parola değiştir</Link>
+          {user.id === getAdminUserId() && (
             <Link className={styles.adminLink} href="/admin">Yönetim</Link>
           )}
           <form action={signOut}>
@@ -176,9 +167,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         )}
         {driveConnectionsError && (
           <div className={styles.driveNotice} role="alert">
-            {driveConnectionsError === 'migration'
-              ? 'Drive bağlantı veritabanı kurulmamış. README içindeki 202610040005 migration adımını tamamlayın.'
-              : 'Google Drive bağlantı durumu okunamadı. Lütfen ayarları kontrol edin.'}
+            Google Drive bağlantı durumu okunamadı. Lütfen ayarları kontrol edin.
           </div>
         )}
         {uploadStatsError && (
@@ -187,12 +176,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         )}
 
-        {hasTableError ? (
-          <div className={styles.notice} role="alert">
-            <strong>Etkinlik tablosu kurulmamış.</strong>
-            <span>Etkinlik veritabanı ayarını tamamlayıp sayfayı yenileyin.</span>
-          </div>
-        ) : error ? (
+        {error ? (
           <div className={styles.notice} role="alert">
             Etkinlikler yüklenemedi. Lütfen sayfayı yenileyin veya daha sonra tekrar deneyin.
           </div>
@@ -280,9 +264,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         {event.event_address && (
                           <div className={styles.locationDetails}>
                             <span>Adres: {event.event_address}</span>
-                            <a href={getMapDirectionsUrl(event.event_address)} target="_blank" rel="noreferrer">
-                              Adrese git
-                            </a>
                           </div>
                         )}
                       </div>
@@ -316,25 +297,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                             </p>
                           </>
                         )}
-                        <form action={updateDatingEnabled} className={styles.datingControl}>
-                          <input type="hidden" name="eventId" value={event.id} />
-                          <input type="hidden" name="enabled" value={event.dating_enabled ? 'false' : 'true'} />
-                          <span>Tanışma</span>
-                          <strong>{event.dating_enabled ? 'Açık' : 'Kapalı'}</strong>
-                          <button
-                            type="submit"
-                            role="switch"
-                            aria-checked={event.dating_enabled}
-                            aria-label={`Tanışma modülünü ${event.dating_enabled ? 'kapat' : 'aç'}`}
-                            className={`${styles.toggle} ${event.dating_enabled ? styles.toggleOn : ''}`}
-                          >
-                            <span />
-                          </button>
-                        </form>
-                        <p className={styles.controlNote}>
-                          Tanışma yalnızca etkinlik günü açılır. Profiller, fotoğraflar, beğeniler ve eşleşmeler gün sonunda silinir.
-                        </p>
-                        <DatingReportsManager eventId={event.id} />
                       </div>
                       <EventShareCard
                         slug={event.slug}

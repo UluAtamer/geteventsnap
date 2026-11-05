@@ -1,3 +1,5 @@
+import { createClient } from '@/lib/db/server'
+import { redirect } from 'next/navigation'
 import BrandLogo from '@/components/brand/BrandLogo'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -10,7 +12,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-export default function ResetPasswordPage() {
+export default async function ResetPasswordPage() {
+  const client = await createClient()
+  if (!(await client.auth.getUser()).data.user) redirect('/giris')
   return (
     <main className={styles.page}>
       <section className={styles.card}>
@@ -19,7 +23,7 @@ export default function ResetPasswordPage() {
         </a>
         <p className={styles.eyebrow}>GÜVENLİ HESAP ERİŞİMİ</p>
         <h1>Yeni parolanızı belirleyin</h1>
-        <p className={styles.intro}>E-postanıza gönderilen parola yenileme bağlantısını açtıktan sonra yeni parolanızı oluşturun.</p>
+        <p className={styles.intro}>Mevcut parolanızı doğrulayarak yeni parolanızı belirleyin.</p>
         <UpdatePasswordForm />
         <p className={styles.switch}><Link href="/giris">Giriş sayfasına dön</Link></p>
       </section>

@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import QRCode from 'qrcode'
-import { getMapDirectionsUrl } from '@/lib/event-location'
 import styles from './EventShareCard.module.css'
 
 type EventShareCardProps = {
@@ -195,16 +194,6 @@ export default function EventShareCard({
         <p className={styles.linkLabel}>Etkinlik bağlantısı</p>
         <a className={styles.eventLink} href={`/e/${slug}`} target="_blank" rel="noreferrer">{eventUrl}</a>
         <div className={styles.actions}>
-          {eventAddress && (
-            <a
-              className={styles.secondary}
-              href={getMapDirectionsUrl(eventAddress)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Adrese git
-            </a>
-          )}
           <button className={styles.secondary} type="button" onClick={copyLink}>
             {copied ? 'Kopyalandı!' : 'Bağlantıyı kopyala'}
           </button>

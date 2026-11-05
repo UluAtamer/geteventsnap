@@ -9,7 +9,7 @@ import {
   uploadFailureResponse,
 } from '@/lib/guest-upload'
 import { getPublicAppUrl } from '@/lib/site-url'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/db/admin'
 
 export const runtime = 'nodejs'
 

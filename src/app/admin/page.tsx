@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { getMemberCode } from '@/lib/member-code'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/db/admin'
 import { deleteEvent, deleteUser, setUserAccess, updateEvent } from './actions'
 import styles from './admin.module.css'
 

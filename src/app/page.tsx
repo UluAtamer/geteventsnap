@@ -1,7 +1,7 @@
 import BrandLogo from '@/components/brand/BrandLogo'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 import styles from './home.module.css'
 
 export const metadata: Metadata = {
@@ -67,10 +67,6 @@ const faqs = [
     answer: 'Yükleme etkinlik günü Türkiye saatiyle 00.00’da açılır ve yedi gün sonra gün sonunda kapanır.',
   },
   {
-    question: 'Tanışma bölümü nasıl çalışır?',
-    answer: 'Etkinlik sahibi bu bölümü açabilir. Katılmak isteyen 18 yaş ve üzerindeki misafirler etkinlik günü bir profil oluşturabilir; profiller ve eşleşmeler gün sonunda silinir.',
-  },
-  {
     question: 'Şu anda paket satın alabilir miyim?',
     answer: 'Şu anki geliştirme sürümünde ödeme alınmıyor. Paket kapsamı ve fiyat bilgileri ödeme aşaması hazır olduğunda açıklanacak.',
   },
@@ -81,57 +77,15 @@ export const dynamic = 'force-dynamic'
 export default async function HomePage() {
   let isLoggedIn = false
   try {
-    const supabase = await createClient()
-    const { data } = await supabase.auth.getSession()
+    const database = await createClient()
+    const { data } = await database.auth.getSession()
     isLoggedIn = Boolean(data.session)
   } catch {
     isLoggedIn = false
   }
 
-  const structuredData = [
-    {
-      '@context': 'https://schema.org',
-      '@type': 'Organization',
-      name: 'GetEventSnap',
-      url: 'https://www.geteventsnap.com',
-      logo: 'https://www.geteventsnap.com/logo.png',
-      description: 'Düğün ve etkinlik fotoğraflarını QR kodla toplama platformu.',
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      name: 'GetEventSnap',
-      url: 'https://www.geteventsnap.com',
-      inLanguage: 'tr-TR',
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'Service',
-      name: 'GetEventSnap düğün ve etkinlik fotoğrafı toplama',
-      serviceType: 'Etkinlik fotoğrafı ve video toplama',
-      url: 'https://www.geteventsnap.com/',
-      provider: {
-        '@type': 'Organization',
-        name: 'GetEventSnap',
-        url: 'https://www.geteventsnap.com/',
-      },
-      areaServed: { '@type': 'Country', name: 'Türkiye' },
-      description: 'Misafirlerin fotoğraf ve videolarını tek QR kodla toplayıp Google Drive’da saklama hizmeti.',
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: faqs.map((faq) => ({
-        '@type': 'Question',
-        name: faq.question,
-        acceptedAnswer: { '@type': 'Answer', text: faq.answer },
-      })),
-    },
-  ]
-
   return (
     <main className={styles.page}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       <header className={styles.nav}>
         <Link className={styles.brand} href="/" aria-label="GetEventSnap ana sayfa">
           <BrandLogo className={styles.brandLogo} />
@@ -260,17 +214,6 @@ export default async function HomePage() {
             </ul>
             <span className={styles.planStatus}>Paket ve fiyat bilgisi yakında</span>
           </article>
-          <article className={styles.plan}>
-            <span className={styles.planLabel}>YAKINDA</span>
-            <h3>Tanışmalı etkinlik</h3>
-            <p>Etkinlik gününde katılmak isteyen misafirler için isteğe bağlı tanışma alanı.</p>
-            <ul>
-              <li>İsteğe bağlı misafir profilleri</li>
-              <li>Karşılıklı beğeniyle eşleşme</li>
-              <li>Gün sonunda veri temizliği</li>
-            </ul>
-            <span className={styles.planStatus}>Paket ve fiyat bilgisi yakında</span>
-          </article>
         </div>
         <p className={styles.pricingNote}>Bu geliştirme sürümünde ödeme alınmıyor. Yakında sunulacak paket ve fiyatlar hazır olduğunda bu sayfada açıklanacak.</p>
       </section>
@@ -295,9 +238,6 @@ export default async function HomePage() {
           <p className={styles.eyebrow}>BİR SONRAKİ GÜZEL GÜNÜNÜZE</p>
           <h2>Anılarınız şimdiden<br />birikmeye başlasın.</h2>
           <p>Hesabınızı oluşturun, etkinlik sayfanızı hazırlayın ve size özel QR kodunuzu alın.</p>
-          <small className={styles.contactNote}>
-            Sorularınız için <a href="mailto:destek@geteventsnap.com">destek@geteventsnap.com</a> adresinden bize ulaşabilirsiniz.
-          </small>
         </div>
         <Link className={styles.contactButton} href="/kayit">Hemen başlayın <span aria-hidden="true">→</span></Link>
       </section>
@@ -310,7 +250,6 @@ export default async function HomePage() {
         <nav aria-label="Yasal bilgiler">
           <Link href="/gizlilik">Gizlilik ve kişisel veriler (taslak)</Link>
           <Link href="/giris">Hesabınıza giriş yapın</Link>
-          <a href="mailto:destek@geteventsnap.com">Destek e-postası</a>
         </nav>
         <span className={styles.copyright}>© {new Date().getFullYear()} GetEventSnap</span>
       </footer>

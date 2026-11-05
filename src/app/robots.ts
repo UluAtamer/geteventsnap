@@ -1,12 +1,16 @@
 import type { MetadataRoute } from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/dashboard', '/admin', '/api/'],
+      disallow: ['/dashboard', '/admin', '/api/', '/e/', '/sifre-yenile'],
     },
-    sitemap: 'https://www.geteventsnap.com/sitemap.xml',
+    ...(process.env.SITE_URL
+      ? { sitemap: new URL('/sitemap.xml', process.env.SITE_URL).toString() }
+      : {}),
   }
 }

@@ -1,0 +1,33 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+
+const settings = {
+  DATABASE_URL: 'postgresql://app:test-only-password@internal-db:5432/eventsnap',
+  SITE_URL: 'https://example.invalid',
+  GOOGLE_CLIENT_ID: 'test-only-client-id',
+  GOOGLE_CLIENT_SECRET: 'test-only-client-secret',
+  DRIVE_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 3).toString('base64'),
+}
+const validate = overrides => spawnSync(process.execPath, ['scripts/validate-env.mjs'], {
+  env: { ...settings, ...overrides }, encoding: 'utf8',
+})
+
+test('Dokploy runtime settings validate without printing credentials', () => {
+  const valid = validate({})
+  assert.equal(valid.status, 0)
+  assert.equal(valid.stdout + valid.stderr, '')
+  for (const invalid of [
+    { DATABASE_URL: '' },
+    { SITE_URL: 'http://example.invalid' },
+    { DRIVE_TOKEN_ENCRYPTION_KEY: 'invalid-private-key' },
+    { GOOGLE_REDIRECT_URI: 'https://another.example.invalid/callback' },
+    { NEXT_PUBLIC_DATABASE_URL: settings.DATABASE_URL },
+  ]) {
+    const result = validate(invalid)
+    assert.equal(result.status, 1)
+    const output = result.stdout + result.stderr
+    for (const value of Object.values(settings)) assert.ok(!output.includes(value))
+    assert.ok(!output.includes('invalid-private-key'))
+  }
+})

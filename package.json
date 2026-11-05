@@ -3,17 +3,24 @@
   "version": "1.0.0",
   "private": true,
   "engines": {
-    "node": ">=22 <23"
+    "node": ">=22.13 <23"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev": "NEXT_TELEMETRY_DISABLED=1 next dev",
+    "build": "NEXT_TELEMETRY_DISABLED=1 next build",
+    "start": "NEXT_TELEMETRY_DISABLED=1 next start",
+    "test": "node --test tests/*.test.mjs",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
+    "predev": "npm run db:migrate",
+    "prestart": "npm run db:migrate",
+    "local:setup": "node scripts/setup-local.mjs",
+    "local:db": "docker compose --env-file .env.local -f compose.local.yaml up -d --wait",
+    "dev:local": "npm run local:setup && npm run local:db && npm run dev -- --hostname 127.0.0.1 --port 3002",
+    "preview:ui": "LOCAL_UI_PREVIEW=1 NEXT_TELEMETRY_DISABLED=1 next dev --hostname 127.0.0.1 --port 3002"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.12.7",
-    "@supabase/supabase-js": "^2.117.2",
-    "next": "^15.5.27",
+    "next": "^15.5.29",
+    "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
@@ -22,7 +29,9 @@
     "postcss": "^8.5.28"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
     "@types/node": "^22.15.0",
+    "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

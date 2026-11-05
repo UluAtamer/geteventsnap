@@ -8,8 +8,8 @@
   --ink: #11162f;
   --muted: #667085;
   --gradient-wine: linear-gradient(135deg, #ff4b55 0%, #8b38f5 55%, #4521c9 100%);
-  --lr-font-display: var(--font-display), Georgia, "Times New Roman", serif;
-  --lr-font-body: var(--font-body), "Segoe UI", Arial, Helvetica, sans-serif;
+  --lr-font-display: Georgia, "Times New Roman", serif;
+  --lr-font-body: "Segoe UI", Arial, Helvetica, sans-serif;
 }
 
 * {
@@ -144,113 +144,6 @@ main > div {
   border: 1px solid rgba(101, 55, 232, .14);
   border-radius: 99px;
   background: rgba(255, 255, 255, .7);
-}
-
-#google_translate_element {
-  position: fixed;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.goog-te-banner-frame,
-.skiptranslate {
-  display: none !important;
-}
-
-body {
-  top: 0 !important;
-}
-
-.language-switcher {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 10px;
-  border: 1px solid rgba(101, 55, 232, .18);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .9);
-  box-shadow: 0 10px 28px rgba(23, 28, 74, .14);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .04em;
-  backdrop-filter: blur(12px);
-}
-
-.support-link {
-  position: fixed;
-  right: 18px;
-  bottom: 70px;
-  z-index: 100;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 0 13px;
-  border: 1px solid rgba(255, 89, 100, .24);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .94);
-  box-shadow: 0 9px 24px rgba(23, 28, 74, .13);
-  color: var(--wine-dark);
-  font-size: 12px;
-  font-weight: 800;
-  backdrop-filter: blur(12px);
-}
-
-.support-link span:first-child {
-  color: var(--gold);
-  font-size: 17px;
-}
-
-.support-link:hover {
-  color: var(--wine);
-  box-shadow: 0 12px 28px rgba(23, 28, 74, .2);
-  transform: translateY(-2px);
-}
-
-.language-icon {
-  display: grid;
-  width: 21px;
-  height: 21px;
-  margin-right: 2px;
-  place-items: center;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  font-size: 15px;
-  line-height: 1;
-}
-
-.language-switcher button {
-  border: 0;
-  padding: 2px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-}
-
-.language-switcher button:hover,
-.language-switcher button.language-active {
-  color: var(--wine);
-}
-
-@media (max-width: 560px) {
-  .language-switcher {
-    right: 12px;
-    bottom: 12px;
-  }
-
-  .support-link {
-    right: 12px;
-    bottom: 62px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

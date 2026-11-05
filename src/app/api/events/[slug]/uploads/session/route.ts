@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { getPublicAppUrl } from '@/lib/site-url'
-import { getEventUploadWindow } from '@/lib/event-upload-window'
 import {
   createDriveFilename,
   createDriveUploadSession,
@@ -17,7 +16,7 @@ import {
   validateGuestUploadWindow,
   type GuestUploadTicket,
 } from '@/lib/guest-upload'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/db/admin'
 
 export const runtime = 'nodejs'
 
@@ -100,7 +99,6 @@ export async function POST(request: Request, { params }: RouteProps) {
     const admin = createAdminClient()
     const event = await findUploadEvent(admin, slug)
     const guestHash = hashGuestUploadId(body.guestId, event.id)
-    const window = getEventUploadWindow(event.event_date)
     validateGuestUploadWindow(event.event_date)
     await enforceGuestUploadRateLimit(admin, request, event.id)
 
@@ -138,10 +136,6 @@ export async function POST(request: Request, { params }: RouteProps) {
       ticket: signGuestUploadTicket(signedTicket),
       fileName,
       mimeType,
-      uploadWindow: {
-        firstUploadDate: window.firstUploadDate,
-        lastUploadDate: window.lastUploadDate,
-      },
     })
   } catch (error) {
     return uploadFailureResponse(error, 'Google Drive yükleme oturumu başlatılamadı')

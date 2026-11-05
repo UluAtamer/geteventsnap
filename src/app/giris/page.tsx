@@ -1,3 +1,4 @@
+import { isUiPreview } from '@/lib/ui-preview'
 import BrandLogo from '@/components/brand/BrandLogo'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -20,7 +21,7 @@ export default function LoginPage() {
         <p className={styles.eyebrow}>ETKİNLİK SAHİBİ</p>
         <h1>Tekrar hoş geldiniz</h1>
         <p className={styles.intro}>Etkinlik anılarınızı yönetmek için hesabınıza giriş yapın.</p>
-        <AuthForm mode="login" />
+        <AuthForm mode="login" preview={isUiPreview()} />
         <p className={styles.switch}>
           Henüz hesabınız yok mu? <Link href="/kayit">Ücretsiz kayıt olun</Link>
         </p>

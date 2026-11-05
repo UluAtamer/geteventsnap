@@ -9,9 +9,9 @@ import {
   getGoogleDriveOAuthConfig,
   hasGoogleDriveServerConfig,
 } from '@/lib/google-drive'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
-import { getPublicAppUrl, normalizePublicAppUrl } from '@/lib/site-url'
+import { createAdminClient } from '@/lib/db/admin'
+import { createClient } from '@/lib/db/server'
+import { getPublicAppUrl } from '@/lib/site-url'
 
 export const runtime = 'nodejs'
 
@@ -27,7 +27,6 @@ function dashboardRedirect(requestUrl: URL, code: string, clearState = true) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/api/google/drive/callback',
-      ...(process.env.NODE_ENV === 'production' ? { domain: '.geteventsnap.com' } : {}),
       maxAge: 0,
     })
   }
@@ -83,13 +82,13 @@ export async function GET(request: Request) {
     return dashboardRedirect(requestUrl, 'setup_required')
   }
 
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const database = await createClient()
+  const { data: { user }, error: userError } = await database.auth.getUser()
   if (userError || !user) {
     return dashboardRedirect(requestUrl, 'session_expired')
   }
 
-  const { data: event, error: eventError } = await supabase
+  const { data: event, error: eventError } = await database
     .from('events')
     .select('id, title')
     .eq('id', eventId)
@@ -97,7 +96,7 @@ export async function GET(request: Request) {
     .single()
 
   if (eventError || !event) {
-    if (eventError?.code !== 'PGRST116') {
+    if (eventError) {
       console.error('Google Drive dönüşünde etkinlik doğrulanamadı:', eventError)
     }
     return dashboardRedirect(requestUrl, 'event_not_found')
@@ -118,7 +117,7 @@ export async function GET(request: Request) {
 
     if (oldConnectionError) {
       console.error('Mevcut Google Drive bağlantısı okunamadı:', oldConnectionError)
-      return dashboardRedirect(requestUrl, oldConnectionError.code === '42P01' ? 'migration_required' : 'connection_check_failed')
+      return dashboardRedirect(requestUrl, 'connection_check_failed')
     }
 
     const tokens = await exchangeGoogleAuthorizationCode(code, oauthConfig)
@@ -158,7 +157,7 @@ export async function GET(request: Request) {
       if (createdFolderId) {
         await removeTemporaryFolder(accessToken, createdFolderId)
       }
-      return dashboardRedirect(requestUrl, saveError.code === '42P01' ? 'migration_required' : 'save_failed')
+      return dashboardRedirect(requestUrl, 'save_failed')
     }
 
     return dashboardRedirect(requestUrl, 'connected')

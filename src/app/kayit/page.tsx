@@ -1,3 +1,4 @@
+import { isUiPreview } from '@/lib/ui-preview'
 import BrandLogo from '@/components/brand/BrandLogo'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -20,7 +21,7 @@ export default function RegisterPage() {
         <p className={styles.eyebrow}>ETKİNLİK SAHİBİ</p>
         <h1>Anılar biriktirmeye başlayın</h1>
         <p className={styles.intro}>Hesabınızı oluşturun; etkinliğinizi sonraki adımda birlikte hazırlayalım.</p>
-        <AuthForm mode="signup" />
+        <AuthForm mode="signup" preview={isUiPreview()} />
         <p className={styles.switch}>
           Zaten hesabınız var mı? <Link href="/giris">Giriş yapın</Link>
         </p>

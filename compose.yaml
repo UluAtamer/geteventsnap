@@ -1,0 +1,26 @@
+# Dokploy Compose: use an existing PostgreSQL service on dokploy-network.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set the Dokploy PostgreSQL internal connection URL}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      SITE_URL: ${SITE_URL:?Set the public HTTPS origin}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set Google OAuth client ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set Google OAuth client secret}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      DRIVE_TOKEN_ENCRYPTION_KEY: ${DRIVE_TOKEN_ENCRYPTION_KEY:?Set a 32-byte Base64 encryption key}
+      ADMIN_USER_ID: ${ADMIN_USER_ID:-}
+      GUEST_MAX_PHOTO_BYTES: ${GUEST_MAX_PHOTO_BYTES:-26214400}
+      GUEST_MAX_VIDEO_BYTES: ${GUEST_MAX_VIDEO_BYTES:-524288000}
+    expose:
+      - "3000"
+    networks:
+      - dokploy-network
+networks:
+  dokploy-network:
+    external: true

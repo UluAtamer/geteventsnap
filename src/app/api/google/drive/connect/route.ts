@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto'
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/db/admin'
 import { getGoogleDriveOAuthConfig, hasGoogleDriveServerConfig } from '@/lib/google-drive'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/db/server'
 import { getPublicAppUrl } from '@/lib/site-url'
 
 export const runtime = 'nodejs'
@@ -17,8 +17,8 @@ function dashboardRedirect(requestUrl: URL, code: string) {
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
-  const supabase = await createClient()
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  const database = await createClient()
+  const { data: { user }, error: userError } = await database.auth.getUser()
   if (userError || !user) {
     return NextResponse.redirect(getPublicAppUrl('/giris', requestUrl))
   }
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     return dashboardRedirect(requestUrl, 'event_not_found')
   }
 
-  const { data: event, error: eventError } = await supabase
+  const { data: event, error: eventError } = await database
     .from('events')
     .select('id, title')
     .eq('id', eventId)
@@ -36,9 +36,7 @@ export async function GET(request: Request) {
     .single()
 
   if (eventError || !event) {
-    if (eventError?.code !== 'PGRST116') {
-      console.error('Google Drive bağlantısı için etkinlik doğrulanamadı:', eventError)
-    }
+    if (eventError) console.error('Google Drive bağlantısı için etkinlik doğrulanamadı:', eventError)
     return dashboardRedirect(requestUrl, 'event_not_found')
   }
 
@@ -65,7 +63,7 @@ export async function GET(request: Request) {
 
   if (connectionError) {
     console.error('Google Drive bağlantı kaydı okunamadı:', connectionError)
-    return dashboardRedirect(requestUrl, connectionError.code === '42P01' ? 'migration_required' : 'connection_check_failed')
+    return dashboardRedirect(requestUrl, 'connection_check_failed')
   }
   if (existingConnection?.connection_status === 'connected') {
     return dashboardRedirect(requestUrl, 'already_connected')
@@ -87,7 +85,6 @@ export async function GET(request: Request) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/api/google/drive/callback',
-    ...(process.env.NODE_ENV === 'production' ? { domain: '.geteventsnap.com' } : {}),
     maxAge: 10 * 60,
   })
   return response

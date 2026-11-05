@@ -4,3 +4,16 @@ out/
 .env*
 !.env.example
 *.tsbuildinfo
+
+.hostinger/
+.vercel/
+.netlify/
+supabase/.temp/
+*.zip
+
+.data/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.sqlite-journal

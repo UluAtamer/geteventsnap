@@ -13,7 +13,7 @@ import {
   uploadFailureResponse,
   verifyGuestUploadTicket,
 } from '@/lib/guest-upload'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/db/admin'
 
 export const runtime = 'nodejs'
 

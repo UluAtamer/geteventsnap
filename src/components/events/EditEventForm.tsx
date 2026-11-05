@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition, type ChangeEvent, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateOwnedEvent } from '@/app/dashboard/actions'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/db/client'
 import styles from '@/app/dashboard/dashboard.module.css'
 
 type Props = {
@@ -80,8 +80,8 @@ export default function EditEventForm({
       let nextCoverUrl = selectedCover
 
       if (coverFile) {
-        const supabase = createClient()
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        const database = createClient()
+        const { data: { user }, error: userError } = await database.auth.getUser()
         if (userError || !user) {
           setMessage('Oturumunuz sona ermiş. Lütfen yeniden giriş yapın.')
           return
@@ -93,7 +93,7 @@ export default function EditEventForm({
           'image/webp': 'webp',
         }
         uploadedPath = `${user.id}/${window.crypto.randomUUID()}.${extensionByType[coverFile.type]}`
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await database.storage
           .from('event-covers')
           .upload(uploadedPath, coverFile, { contentType: coverFile.type, upsert: false })
 
@@ -103,8 +103,8 @@ export default function EditEventForm({
           return
         }
 
-        const { data: { publicUrl } } = supabase.storage.from('event-covers').getPublicUrl(uploadedPath)
-        nextCoverUrl = publicUrl
+        const { data: { privateUrl } } = database.storage.from('event-covers').getPrivateUrl(uploadedPath)
+        nextCoverUrl = privateUrl
       }
 
       formData.set('eventId', eventId)

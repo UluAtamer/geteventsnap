@@ -546,55 +546,6 @@
   font-weight: 700;
 }
 
-.datingControl {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: #11162f;
-  font-size: 13px;
-}
-
-.datingControl strong {
-  color: #6537e8;
-}
-
-.toggle {
-  position: relative;
-  width: 42px;
-  height: 24px;
-  margin-left: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 99px;
-  background: #cfc5c7;
-  cursor: pointer;
-  transition: background .15s ease;
-}
-
-.toggle span {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: white;
-  transition: transform .15s ease;
-}
-
-.toggleOn {
-  background: #6537e8;
-}
-
-.toggleOn span {
-  transform: translateX(18px);
-}
-
-.toggle:focus-visible {
-  outline: 3px solid #916bff;
-  outline-offset: 2px;
-}
-
 .controlNote {
   margin: 0;
   color: #667085;

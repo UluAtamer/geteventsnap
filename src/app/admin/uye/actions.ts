@@ -5,8 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/admin-auth'
 import { getMemberCode } from '@/lib/member-code'
-import { slugify } from '@/lib/slug'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/db/admin'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -24,9 +23,8 @@ export async function createEventForMember(formData: FormData) {
   const eventAddress = String(formData.get('event_address') ?? '').trim()
   const eventType = String(formData.get('event_type') ?? '').trim()
   const welcomeMessage = String(formData.get('welcome_message') ?? '').trim()
-  const baseSlug = slugify(title)
 
-  if (title.length < 2 || title.length > 100 || !baseSlug ||
+  if (title.length < 2 || title.length > 100 ||
     !['dugun', 'arkadas', 'parti', 'diger'].includes(eventType) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) ||
     new Date(`${eventDate}T00:00:00Z`).toISOString().slice(0, 10) !== eventDate ||
@@ -46,7 +44,7 @@ export async function createEventForMember(formData: FormData) {
     event_time: eventTime || null,
     event_address: eventAddress || null,
     event_type: eventType,
-    slug: `${baseSlug}-${randomBytes(4).toString('hex')}`,
+    slug: randomBytes(24).toString('hex'),
     welcome_message: welcomeMessage,
     cover_image_url: `/covers/${eventType}.svg`,
   })

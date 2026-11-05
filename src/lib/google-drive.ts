@@ -5,8 +5,6 @@ import { getPublicAppUrl } from '@/lib/site-url'
 
 type JsonObject = Record<string, unknown>
 
-const productionRedirectUri = 'https://www.geteventsnap.com/api/google/drive/callback'
-
 export type GoogleDriveOAuthConfig = {
   clientId: string
   clientSecret: string
@@ -31,8 +29,6 @@ export function hasGoogleDriveServerConfig() {
   return Boolean(
     process.env.GOOGLE_CLIENT_ID &&
     process.env.GOOGLE_CLIENT_SECRET &&
-    process.env.SUPABASE_SERVICE_ROLE_KEY &&
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
     process.env.DRIVE_TOKEN_ENCRYPTION_KEY &&
     Buffer.from(process.env.DRIVE_TOKEN_ENCRYPTION_KEY, 'base64').length === 32
   )
@@ -45,9 +41,7 @@ export function getGoogleDriveOAuthConfig(origin: string): GoogleDriveOAuthConfi
     throw new Error('Google OAuth bilgileri yapılandırılmamış.')
   }
 
-  const redirectUri = process.env.NODE_ENV === 'production'
-    ? productionRedirectUri
-    : process.env.GOOGLE_REDIRECT_URI ||
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI ||
       getPublicAppUrl('/api/google/drive/callback', new URL(origin)).toString()
   const parsedRedirectUri = new URL(redirectUri)
 

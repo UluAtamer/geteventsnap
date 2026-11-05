@@ -2,11 +2,12 @@
 
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/db/client'
 import styles from './AuthForm.module.css'
 
 export default function UpdatePasswordForm() {
   const router = useRouter()
+  const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [error, setError] = useState('')
@@ -16,8 +17,8 @@ export default function UpdatePasswordForm() {
     event.preventDefault()
     setError('')
 
-    if (password.length < 6) {
-      setError('Yeni parola en az 6 karakter olmalı.')
+    if (password.length < 12) {
+      setError('Yeni parola en az 12 karakter olmalı.')
       return
     }
     if (password !== confirmation) {
@@ -27,10 +28,10 @@ export default function UpdatePasswordForm() {
 
     setIsSubmitting(true)
     try {
-      const supabase = createClient()
-      const { error: updateError } = await supabase.auth.updateUser({ password })
+      const database = createClient()
+      const { error: updateError } = await database.auth.updateUser({ password, currentPassword })
       if (updateError) {
-        setError('Parola güncellenemedi. Yenileme bağlantısının süresi dolmuş olabilir; yeni bağlantı isteyin.')
+        setError('Parola güncellenemedi. Mevcut parolanızı ve oturumunuzu kontrol edin.')
         return
       }
 
@@ -45,13 +46,15 @@ export default function UpdatePasswordForm() {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
+      <label className={styles.label} htmlFor="current-password">Mevcut parola</label>
+      <input className={styles.input} id="current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} maxLength={128} required />
       <label className={styles.label} htmlFor="new-password">Yeni parola</label>
       <input
         className={styles.input}
         id="new-password"
         type="password"
         autoComplete="new-password"
-        minLength={6}
+        minLength={12}
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         required
@@ -62,7 +65,7 @@ export default function UpdatePasswordForm() {
         id="confirm-password"
         type="password"
         autoComplete="new-password"
-        minLength={6}
+        minLength={12}
         value={confirmation}
         onChange={(event) => setConfirmation(event.target.value)}
         required
