@@ -215,8 +215,16 @@ test('deployment migration runner is repeatable and tracks the applied schema', 
   const source = readFileSync('scripts/migrate.mjs', 'utf8').replace("from 'pg'", "from '../pg-test-adapter.mjs'")
   writeFileSync(join(directory, 'scripts', 'migrate.mjs'), source)
   const migrationUrl = pathToFileURL(join(directory, 'scripts', 'migrate.mjs')).href
-  await import(migrationUrl + '?first')
-  await import(migrationUrl + '?second')
+  const messages = []
+  const originalLog = console.log
+  console.log = message => messages.push(String(message))
+  try {
+    await import(migrationUrl + '?first')
+    await import(migrationUrl + '?second')
+  } finally { console.log = originalLog }
+  assert.equal(messages.filter(message => message === '[Veritabanı] PostgreSQL bağlantısı başarıyla kuruldu.').length, 2)
+  assert.equal(messages.filter(message => message === '[Veritabanı] Şema kontrolü tamamlandı; veritabanı hazır.').length, 2)
+  assert.ok(!messages.join('\n').includes(process.env.DATABASE_URL))
   assert.equal(process.exitCode || 0, 0)
   const versions = await database().prepare('SELECT version FROM schema_migrations ORDER BY version').all()
   assert.deepEqual(versions.map(row => row.version), ['001_initial.sql', '002_admin_role.sql'])

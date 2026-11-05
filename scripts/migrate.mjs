@@ -6,7 +6,10 @@ import { fileURLToPath } from 'node:url'
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL tanımlı değil.')
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10000 })
 try {
+  console.log('[Veritabanı] PostgreSQL bağlantısı kuruluyor...')
   await client.connect()
+  await client.query('SELECT 1')
+  console.log('[Veritabanı] PostgreSQL bağlantısı başarıyla kuruldu.')
   await client.query('BEGIN')
   // Serialize migrations across concurrent application replicas.
   await client.query('SELECT pg_advisory_xact_lock(726283901)')
@@ -25,6 +28,7 @@ try {
     console.log(`Migration uygulandı: ${version}`)
   }
   await client.query('COMMIT')
+  console.log('[Veritabanı] Şema kontrolü tamamlandı; veritabanı hazır.')
 } catch {
   await client.query('ROLLBACK').catch(() => {})
   console.error('Veritabanı kurulumu tamamlanamadı. DATABASE_URL ve veritabanı izinlerini kontrol edin.')

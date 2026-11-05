@@ -137,6 +137,18 @@ Başlangıç sırası:
 3. Migration’lar PostgreSQL üzerinde uygulanır. İlk kurulumda `Migration uygulandı: 001_initial.sql` satırı görülür.
 4. Next.js sunucusu 3000 portunda başlar.
 
+Container çalışma logunda her başarılı başlangıçta, yeni migration olmasa da, şu mesajlar görünür:
+
+```text
+[Başlangıç] Environment ayarları doğrulandı.
+[Veritabanı] PostgreSQL bağlantısı kuruluyor...
+[Veritabanı] PostgreSQL bağlantısı başarıyla kuruldu.
+[Veritabanı] Şema kontrolü tamamlandı; veritabanı hazır.
+[Başlangıç] Web sunucusu başlatılıyor.
+```
+
+Bağlantı başarı mesajı gerçek bir `SELECT 1` sorgusundan sonra yazılır. Bağlantı adresi, kullanıcı adı ve parola loglanmaz. Environment doğrulaması başarısızsa veritabanı aşamasına geçilmez; ilk hata mesajını kontrol et. Bu mesajlar Docker build sırasında değil container çalışmaya başladığında görünür.
+
 Migration’ları SQL paneline elle yapıştırman gerekmez. Uygulanmış migration dosyalarını değiştirme; sonraki şema değişiklikleri yeni dosyayla yapılır. Veritabanı veya zorunlu environment ayarları hazır değilse uygulama başlamaz.
 
 ## 8. Canlı kontrol yap
