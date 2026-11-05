@@ -34,6 +34,7 @@ await engine.exec('CREATE TABLE schema_migrations(version text PRIMARY KEY, chec
 try {
   await engine.exec(readFileSync('db/migrations/001_initial.sql', 'utf8'))
   await engine.exec(readFileSync('db/migrations/002_admin_role.sql', 'utf8'))
+  await engine.exec(readFileSync('db/migrations/003_drive_token_format.sql', 'utf8'))
 } catch (error) { throw new Error(error.message) }
 const { database, Query, rpc, consumeRateLimit } = await import(pathToFileURL(join(directory, 'core.mjs')).href)
 const { register, login, createSession, userForSession, revokeSession, changePassword, userAdmin } = await import(pathToFileURL(join(directory, 'auth.mjs')).href)
@@ -209,7 +210,7 @@ test('guest HTML and client props omit event names, addresses, email and private
 test('deployment migration runner is repeatable and tracks the applied schema', async () => {
   mkdirSync(join(directory, 'scripts'))
   mkdirSync(join(directory, 'db', 'migrations'), { recursive: true })
-  for (const version of ['001_initial.sql', '002_admin_role.sql']) {
+  for (const version of ['001_initial.sql', '002_admin_role.sql', '003_drive_token_format.sql']) {
     writeFileSync(join(directory, 'db', 'migrations', version), readFileSync(`db/migrations/${version}`))
   }
   const source = readFileSync('scripts/migrate.mjs', 'utf8').replace("from 'pg'", "from '../pg-test-adapter.mjs'")
@@ -227,7 +228,7 @@ test('deployment migration runner is repeatable and tracks the applied schema', 
   assert.ok(!messages.join('\n').includes(process.env.DATABASE_URL))
   assert.equal(process.exitCode || 0, 0)
   const versions = await database().prepare('SELECT version FROM schema_migrations ORDER BY version').all()
-  assert.deepEqual(versions.map(row => row.version), ['001_initial.sql', '002_admin_role.sql'])
+  assert.deepEqual(versions.map(row => row.version), ['001_initial.sql', '002_admin_role.sql', '003_drive_token_format.sql'])
 })
 
 test('first-deployment seed is opt-in, hashed and never resets an existing account password', async () => {
@@ -312,4 +313,29 @@ test('public registration cannot assign itself an administrator role', async () 
   assert.equal(response.status, 200)
   assert.equal((await response.json()).data.user.is_admin, false)
   assert.equal((await login('role-injection@example.test', password)).is_admin, false)
+})
+
+test('legacy Drive migration requests reauthorization while preserving folders and current connections', async () => {
+  const owner = await register('drive-upgrade@example.test', password)
+  const events = []
+  for (const slug of ['legacy-drive', 'current-drive']) {
+    const result = await new Query('events', owner.id, false).insert({ owner_id: owner.id, title: 'Private event', event_date: '2026-11-05', slug }).select('*').single()
+    assert.equal(result.error, null)
+    events.push(result.data)
+  }
+  for (let index = 0; index < events.length; index++) {
+    const result = await new Query('event_drive_connections', null, true).upsert({
+      event_id: events[index].id, owner_id: owner.id,
+      encrypted_refresh_token: index ? 'v2.iv.tag.ciphertext' : 'legacy-iv.legacy-tag.legacy-ciphertext',
+      drive_folder_id: `private-folder-${index}`, drive_folder_url: `private-folder-url-${index}`,
+    })
+    assert.equal(result.error, null)
+  }
+  await engine.exec(readFileSync('db/migrations/003_drive_token_format.sql', 'utf8'))
+  const legacy = await database().prepare('SELECT * FROM event_drive_connections WHERE event_id=?').get(events[0].id)
+  const current = await database().prepare('SELECT * FROM event_drive_connections WHERE event_id=?').get(events[1].id)
+  assert.equal(legacy.connection_status, 'reauth_required')
+  assert.equal(legacy.drive_folder_id, 'private-folder-0')
+  assert.equal(legacy.drive_folder_url, 'private-folder-url-0')
+  assert.equal(current.connection_status, 'connected')
 })

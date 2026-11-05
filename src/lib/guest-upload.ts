@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { deriveDriveKey } from '@/lib/drive-crypto'
 import { isIP } from 'node:net'
 import { NextResponse } from 'next/server'
 import { getEventUploadWindow } from '@/lib/event-upload-window'
@@ -68,12 +69,11 @@ export class GuestUploadError extends Error {
 }
 
 function encryptionKey() {
-  const value = process.env.DRIVE_TOKEN_ENCRYPTION_KEY
-  const key = value ? Buffer.from(value, 'base64') : Buffer.alloc(0)
-  if (key.length !== 32) {
-    throw new GuestUploadError('Sunucu anahtarları ayarlı değil.', 503, 'server_setup_required')
+  try {
+    return deriveDriveKey('guest-uploads')
+  } catch {
+    throw new GuestUploadError('Google OAuth bilgileri ayarlı değil.', 503, 'server_setup_required')
   }
-  return key
 }
 
 function configuredLimit(variable: string, fallback: number) {
@@ -221,8 +221,11 @@ async function getAccessToken(
   let refreshToken: string
   try {
     refreshToken = decryptGoogleRefreshToken(connection.encrypted_refresh_token)
-  } catch (error) {
-    console.error('Şifrelenmiş Drive anahtarı çözülemedi:', error)
+  } catch {
+    console.error('Drive bağlantısının yeniden yetkilendirilmesi gerekiyor.')
+    await admin.from('event_drive_connections')
+      .update({ connection_status: 'reauth_required', last_error_at: new Date().toISOString() })
+      .eq('event_id', eventId)
     throw new GuestUploadError('Google Drive bağlantısını yenilemek gerekiyor.', 409, 'drive_reauth_required')
   }
 

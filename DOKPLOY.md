@@ -87,19 +87,12 @@ SITE_URL=https://etkinlik.example.com
 GOOGLE_CLIENT_ID=<Google Client ID>
 GOOGLE_CLIENT_SECRET=<Google Client Secret>
 GOOGLE_REDIRECT_URI=https://etkinlik.example.com/api/google/drive/callback
-DRIVE_TOKEN_ENCRYPTION_KEY=<32 bayt Base64 anahtar>
 ADMIN_USER_ID=
 GUEST_MAX_PHOTO_BYTES=26214400
 GUEST_MAX_VIDEO_BYTES=524288000
 ```
 
-`DRIVE_TOKEN_ENCRYPTION_KEY` üretmek için kendi terminalinde çalıştır:
-
-```sh
-openssl rand -base64 32
-```
-
-Çıktıyı ilgili environment değerine yapıştır. Anahtarı güvenli biçimde sakla; değiştirilmesi mevcut Drive bağlantılarının çözülememesine neden olur.
+Ayrı bir Drive şifreleme anahtarı üretmen gerekmez. Kullanıcı token’ları `GOOGLE_CLIENT_SECRET` değerinden türetilen anahtarla şifreli tutulur. Google istemci sırrı değiştirilirse kullanıcılar Drive’larını yeniden bağlamalıdır. Önceki sürümde bağlanan hesaplar bu güncellemede yeniden yetkilendirme ister; mevcut Drive klasörleri korunur.
 
 - Değerler **runtime environment** olarak container’a aktarılmalı; build argument olarak verilmemeli.
 - `SITE_URL` HTTPS kaynağı olmalı; sonuna sayfa yolu veya `:3000` ekleme.
@@ -215,7 +208,7 @@ Güncellemede kodu bağlı dala gönderip yeniden deploy et. Veritabanı servisi
 | Giriş sonrası oturum korunmuyor | HTTPS kullan ve alan adı tutarlılığını kontrol et. |
 | Google `redirect_uri_mismatch` | Google istemcisindeki callback ile `SITE_URL`/`GOOGLE_REDIRECT_URI` değerlerini eşleştir. |
 | Drive erişimi reddediliyor | Doğru OAuth istemcisi, izin kapsamı ve Google test/yayın erişimini kontrol et. |
-| Eski Drive bağlantısı okunamıyor | Önceki `DRIVE_TOKEN_ENCRYPTION_KEY` değerinin korunduğunu kontrol et. |
+| Eski Drive bağlantısı okunamıyor | Panelden Google Drive’ı yeniden bağla. Google istemci sırrı değiştiyse yeniden yetkilendirme gerekir. |
 
 ## Compose seçeneği
 

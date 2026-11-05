@@ -122,10 +122,14 @@ export async function GET(request: Request) {
 
     const tokens = await exchangeGoogleAuthorizationCode(code, oauthConfig)
     accessToken = tokens.accessToken
-    const refreshToken = tokens.refreshToken ||
-      (oldConnection?.encrypted_refresh_token
-        ? decryptGoogleRefreshToken(oldConnection.encrypted_refresh_token)
-        : '')
+    let refreshToken = tokens.refreshToken || ''
+    if (!refreshToken && oldConnection?.encrypted_refresh_token) {
+      try {
+        refreshToken = decryptGoogleRefreshToken(oldConnection.encrypted_refresh_token)
+      } catch {
+        return dashboardRedirect(requestUrl, 'refresh_token_missing')
+      }
+    }
     if (!refreshToken) {
       return dashboardRedirect(requestUrl, 'refresh_token_missing')
     }

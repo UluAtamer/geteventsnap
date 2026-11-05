@@ -1,7 +1,8 @@
 import 'server-only'
 
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import { getPublicAppUrl } from '@/lib/site-url'
+
+export { encryptGoogleRefreshToken, decryptGoogleRefreshToken } from '@/lib/drive-crypto'
 
 type JsonObject = Record<string, unknown>
 
@@ -11,27 +12,8 @@ export type GoogleDriveOAuthConfig = {
   redirectUri: string
 }
 
-function encryptionKey() {
-  const encodedKey = process.env.DRIVE_TOKEN_ENCRYPTION_KEY
-  if (!encodedKey) {
-    throw new Error('Drive token şifreleme anahtarı yapılandırılmamış.')
-  }
-
-  const key = Buffer.from(encodedKey, 'base64')
-  if (key.length !== 32) {
-    throw new Error('Drive token şifreleme anahtarı geçersiz; 32 baytlık Base64 anahtar gerekli.')
-  }
-
-  return key
-}
-
 export function hasGoogleDriveServerConfig() {
-  return Boolean(
-    process.env.GOOGLE_CLIENT_ID &&
-    process.env.GOOGLE_CLIENT_SECRET &&
-    process.env.DRIVE_TOKEN_ENCRYPTION_KEY &&
-    Buffer.from(process.env.DRIVE_TOKEN_ENCRYPTION_KEY, 'base64').length === 32
-  )
+  return Boolean(process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim())
 }
 
 export function getGoogleDriveOAuthConfig(origin: string): GoogleDriveOAuthConfig {
@@ -46,27 +28,6 @@ export function getGoogleDriveOAuthConfig(origin: string): GoogleDriveOAuthConfi
   const parsedRedirectUri = new URL(redirectUri)
 
   return { clientId, clientSecret, redirectUri: parsedRedirectUri.toString() }
-}
-
-export function encryptGoogleRefreshToken(refreshToken: string) {
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', encryptionKey(), iv)
-  const encrypted = Buffer.concat([cipher.update(refreshToken, 'utf8'), cipher.final()])
-  return [iv, cipher.getAuthTag(), encrypted].map((part) => part.toString('base64url')).join('.')
-}
-
-export function decryptGoogleRefreshToken(encryptedToken: string) {
-  const [encodedIv, encodedTag, encodedValue, ...extra] = encryptedToken.split('.')
-  if (!encodedIv || !encodedTag || !encodedValue || extra.length) {
-    throw new Error('Saklanan Drive erişim bilgisi okunamıyor.')
-  }
-
-  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(encodedIv, 'base64url'))
-  decipher.setAuthTag(Buffer.from(encodedTag, 'base64url'))
-  return Buffer.concat([
-    decipher.update(Buffer.from(encodedValue, 'base64url')),
-    decipher.final(),
-  ]).toString('utf8')
 }
 
 async function readJson(response: Response): Promise<JsonObject> {

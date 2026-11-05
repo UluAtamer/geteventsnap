@@ -17,7 +17,6 @@ DATABASE_URL=<PostgreSQL Internal Connection URL>
 SITE_URL=https://<kendi-alan-adiniz>
 GOOGLE_CLIENT_ID=<Google OAuth web client ID>
 GOOGLE_CLIENT_SECRET=<Google OAuth client secret>
-DRIVE_TOKEN_ENCRYPTION_KEY=<32 bayt Base64 anahtar>
 ```
 
 İsteğe bağlı değişkenler:
@@ -30,7 +29,7 @@ DRIVE_TOKEN_ENCRYPTION_KEY=<32 bayt Base64 anahtar>
 | `GUEST_MAX_PHOTO_BYTES` | Varsayılan 26214400 (25 MB). |
 | `GUEST_MAX_VIDEO_BYTES` | Varsayılan 524288000 (500 MB). |
 
-Şifreleme anahtarı üretmek için yerel terminalde `openssl rand -base64 32` çalıştırıp sonucu Dokploy Environment’a ekleyin. Anahtarı değiştirmek eski Drive bağlantılarının okunmasını engeller; korunmuş bir yedeğini tutun. Environment değişikliklerinden sonra yeniden deploy edin. Aynı Docker imajı farklı runtime environment değerleriyle kullanılabilir; `NEXT_PUBLIC_` değişkeni gerekmez.
+Ayrı bir Drive şifreleme anahtarı gerekmez. Kullanıcı token’ları `GOOGLE_CLIENT_SECRET` değerinden HKDF ile türetilen anahtarla şifrelenir; veritabanında açık metin tutulmaz. Google istemci sırrı değişirse Drive hesapları yeniden bağlanmalıdır. Environment değişikliklerinden sonra yeniden deploy edin. `NEXT_PUBLIC_` değişkeni gerekmez.
 
 PostgreSQL bağlantısı sadece sunucu kodunda kullanılır. `DATABASE_URL` içindeki kullanıcıya yalnızca bu uygulamanın veritabanında yetki verin. Dahili Dokploy bağlantısı için SSL ayarı Dokploy’un verdiği URL’den gelir; TLS kullanılıyorsa sertifika doğrulamasını kapatmayın. Veritabanı yedeklerini Dokploy’da özel erişimle yapılandırın. Uygulama container’ında kalıcı dosya tutulmadığı için ayrıca volume gerekmez.
 
