@@ -1,11 +1,8 @@
 import 'server-only'
 
+import { isAdminUser } from '@/lib/admin-access'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/db/server'
-
-export function getAdminUserId() {
-  return (process.env.ADMIN_USER_ID || '').trim()
-}
 
 export async function requireAdmin() {
   const database = await createClient()
@@ -15,7 +12,7 @@ export async function requireAdmin() {
     redirect('/giris')
   }
 
-  if (user.id !== getAdminUserId()) {
+  if (!isAdminUser(user)) {
     redirect('/dashboard')
   }
 

@@ -10,4 +10,5 @@ until node scripts/migrate.mjs; do
   fi
   sleep 3
 done
+node scripts/seed-user.mjs
 exec node server.js

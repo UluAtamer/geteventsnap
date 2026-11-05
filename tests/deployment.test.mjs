@@ -19,6 +19,9 @@ test('Dokploy runtime settings validate without printing credentials', () => {
   assert.equal(valid.stdout + valid.stderr, '')
   for (const invalid of [
     { DATABASE_URL: '' },
+    { SEED_USER_ENABLED: 'true' },
+    { SEED_USER_IS_ADMIN: 'yes' },
+    { SEED_USER_ENABLED: 'true', SEED_USER_EMAIL: 'seed@example.test', SEED_USER_PASSWORD: 'short' },
     { SITE_URL: 'http://example.invalid' },
     { DRIVE_TOKEN_ENCRYPTION_KEY: 'invalid-private-key' },
     { GOOGLE_REDIRECT_URI: 'https://another.example.invalid/callback' },

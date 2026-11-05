@@ -31,7 +31,10 @@ for (const name of ['core', 'auth']) {
 }
 const { engine } = await import(pathToFileURL(join(directory, 'pg-test-adapter.mjs')).href)
 await engine.exec('CREATE TABLE schema_migrations(version text PRIMARY KEY, checksum text NOT NULL)')
-try { await engine.exec(readFileSync('db/migrations/001_initial.sql', 'utf8')) } catch (error) { throw new Error(error.message) }
+try {
+  await engine.exec(readFileSync('db/migrations/001_initial.sql', 'utf8'))
+  await engine.exec(readFileSync('db/migrations/002_admin_role.sql', 'utf8'))
+} catch (error) { throw new Error(error.message) }
 const { database, Query, rpc, consumeRateLimit } = await import(pathToFileURL(join(directory, 'core.mjs')).href)
 const { register, login, createSession, userForSession, revokeSession, changePassword, userAdmin } = await import(pathToFileURL(join(directory, 'auth.mjs')).href)
 after(async () => { await database().close(); await engine.close(); rmSync(directory, { recursive: true, force: true }) })
@@ -206,13 +209,99 @@ test('guest HTML and client props omit event names, addresses, email and private
 test('deployment migration runner is repeatable and tracks the applied schema', async () => {
   mkdirSync(join(directory, 'scripts'))
   mkdirSync(join(directory, 'db', 'migrations'), { recursive: true })
-  writeFileSync(join(directory, 'db', 'migrations', '001_initial.sql'), readFileSync('db/migrations/001_initial.sql'))
+  for (const version of ['001_initial.sql', '002_admin_role.sql']) {
+    writeFileSync(join(directory, 'db', 'migrations', version), readFileSync(`db/migrations/${version}`))
+  }
   const source = readFileSync('scripts/migrate.mjs', 'utf8').replace("from 'pg'", "from '../pg-test-adapter.mjs'")
   writeFileSync(join(directory, 'scripts', 'migrate.mjs'), source)
   const migrationUrl = pathToFileURL(join(directory, 'scripts', 'migrate.mjs')).href
   await import(migrationUrl + '?first')
   await import(migrationUrl + '?second')
   assert.equal(process.exitCode || 0, 0)
-  const versions = await database().prepare('SELECT version FROM schema_migrations').all()
-  assert.deepEqual(versions.map(row => row.version), ['001_initial.sql'])
+  const versions = await database().prepare('SELECT version FROM schema_migrations ORDER BY version').all()
+  assert.deepEqual(versions.map(row => row.version), ['001_initial.sql', '002_admin_role.sql'])
+})
+
+test('first-deployment seed is opt-in, hashed and never resets an existing account password', async () => {
+  const { seedUser } = await import('../scripts/seed-user.mjs')
+  assert.equal(await seedUser({ query() { throw new Error('No database call expected') } }, {}), 'disabled')
+  const settings = { SEED_USER_ENABLED: 'true', SEED_USER_EMAIL: 'Bootstrap@Example.Test', SEED_USER_PASSWORD: 'Temporary-bootstrap-4321' }
+  const client = { query: engine.query.bind(engine) }
+  await assert.rejects(seedUser(client, { ...settings, SEED_USER_PASSWORD: 'short' }))
+  assert.equal(await seedUser(client, settings), 'created')
+  const user = await login('bootstrap@example.test', settings.SEED_USER_PASSWORD)
+  assert.ok(user)
+  const row = await database().prepare('SELECT password_hash FROM users WHERE id=?').get(user.id)
+  assert.ok(row.password_hash.startsWith('scrypt:'))
+  assert.ok(!row.password_hash.includes(settings.SEED_USER_PASSWORD))
+  const oldToken = await createSession(user.id)
+  const newPassword = 'Changed-bootstrap-password-9876'
+  assert.equal(await changePassword(user, settings.SEED_USER_PASSWORD, newPassword), true)
+  assert.equal(await userForSession(oldToken), null)
+  assert.equal(await seedUser(client, settings), 'exists')
+  assert.equal(await login(user.email, settings.SEED_USER_PASSWORD), null)
+  assert.equal((await login(user.email, newPassword)).id, user.id)
+  assert.equal(await seedUser(client, { ...settings, SEED_USER_ENABLED: 'false' }), 'disabled')
+  assert.equal((await login(user.email, newPassword)).id, user.id)
+  const count = await database().prepare('SELECT count(*) AS count FROM users WHERE email=?').get(user.email)
+  assert.equal(Number(count.count), 1)
+})
+
+test('seed administrator role requires explicit opt-in and the current password for promotion', async () => {
+  const { seedUser } = await import('../scripts/seed-user.mjs')
+  const client = { query: engine.query.bind(engine) }
+  const config = { SEED_USER_ENABLED: 'true', SEED_USER_IS_ADMIN: 'true', SEED_USER_EMAIL: 'first-admin@example.test', SEED_USER_PASSWORD: password }
+  assert.equal(await seedUser(client, config), 'created')
+  const admin = await login(config.SEED_USER_EMAIL, password)
+  assert.equal(admin.is_admin, true)
+  await seedUser(client, { ...config, SEED_USER_ENABLED: 'false' })
+  assert.equal((await userForSession(await createSession(admin.id))).is_admin, true)
+
+  const member = await register('promote-member@example.test', password)
+  assert.equal(member.is_admin, false)
+  await assert.rejects(seedUser(client, { ...config, SEED_USER_EMAIL: member.email, SEED_USER_PASSWORD: 'Incorrect-password-1234' }))
+  assert.equal((await login(member.email, password)).is_admin, false)
+  const before = await database().prepare('SELECT password_hash FROM users WHERE id=?').get(member.id)
+  assert.equal(await seedUser(client, { ...config, SEED_USER_EMAIL: member.email }), 'promoted')
+  assert.equal((await login(member.email, password)).is_admin, true)
+  const after = await database().prepare('SELECT password_hash FROM users WHERE id=?').get(member.id)
+  assert.equal(after.password_hash, before.password_hash)
+})
+
+test('admin visibility and server authorization use the same trusted role or explicit UUID', async () => {
+  writeFileSync(join(directory, 'admin-access.mjs'), ts.transpileModule(readFileSync('src/lib/admin-access.ts', 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
+  const { isAdminUser } = await import(pathToFileURL(join(directory, 'admin-access.mjs')).href)
+  assert.equal(isAdminUser(null, ''), false)
+  assert.equal(isAdminUser({ id: 'normal', is_admin: false }, ''), false)
+  assert.equal(isAdminUser({ id: 'admin', is_admin: true }, ''), true)
+  assert.equal(isAdminUser({ id: 'configured', is_admin: false }, 'configured'), true)
+  assert.equal(isAdminUser({ id: 'normal', is_admin: false }, 'configured'), false)
+
+  const source = readFileSync('src/lib/admin-auth.ts', 'utf8')
+    .replace("import 'server-only'", '')
+    .replace("from '@/lib/admin-access'", "from './admin-access.mjs'")
+    .replace("import { redirect } from 'next/navigation'", "function redirect(path) { throw new Error('REDIRECT:' + path) }")
+    .replace("import { createClient } from '@/lib/db/server'", "async function createClient() { return { auth: { async getUser() { return { data: { user: globalThis.adminGuardUser }, error: null } } } } }")
+  writeFileSync(join(directory, 'admin-guard.mjs'), ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
+  const { requireAdmin } = await import(pathToFileURL(join(directory, 'admin-guard.mjs')).href)
+  globalThis.adminGuardUser = null
+  await assert.rejects(requireAdmin(), /REDIRECT:\/giris/)
+  globalThis.adminGuardUser = { id: 'normal', is_admin: false }
+  await assert.rejects(requireAdmin(), /REDIRECT:\/dashboard/)
+  globalThis.adminGuardUser = { id: 'admin', is_admin: true }
+  assert.equal((await requireAdmin()).id, 'admin')
+  delete globalThis.adminGuardUser
+})
+
+test('public registration cannot assign itself an administrator role', async () => {
+  const { NextRequest } = await import('next/server.js')
+  const auth = await loadRoute('src/app/api/auth/[action]/route.ts', 'signup-role-route')
+  const request = new NextRequest('http://internal-container:3000/api/auth/signup', {
+    method: 'POST', headers: { origin: process.env.SITE_URL, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'role-injection@example.test', password, is_admin: true, role: 'admin' }),
+  })
+  const response = await auth.POST(request, { params: Promise.resolve({ action: 'signup' }) })
+  assert.equal(response.status, 200)
+  assert.equal((await response.json()).data.user.is_admin, false)
+  assert.equal((await login('role-injection@example.test', password)).is_admin, false)
 })

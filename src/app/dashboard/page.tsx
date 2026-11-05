@@ -6,7 +6,7 @@ import EventShareCard from '@/components/events/EventShareCard'
 import EditEventForm from '@/components/events/EditEventForm'
 import { getEventUploadWindow } from '@/lib/event-upload-window'
 import { getMemberCode } from '@/lib/member-code'
-import { getAdminUserId } from '@/lib/admin-auth'
+import { isAdminUser } from '@/lib/admin-access'
 import { hasGoogleDriveServerConfig } from '@/lib/google-drive'
 import { createAdminClient } from '@/lib/db/admin'
 import { deleteOwnedEvent, signOut } from './actions'
@@ -135,8 +135,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </Link>
         <div className={styles.headerActions}>
           <Link href="/sifre-yenile">Parola değiştir</Link>
-          {user.id === getAdminUserId() && (
-            <Link className={styles.adminLink} href="/admin">Yönetim</Link>
+          {isAdminUser(user) && (
+            <Link className={styles.adminLink} href="/admin">Yönetim paneli</Link>
           )}
           <form action={signOut}>
             <button className={styles.signOut} type="submit">Güvenli çıkış yap</button>

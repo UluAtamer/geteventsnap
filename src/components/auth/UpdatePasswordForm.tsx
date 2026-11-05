@@ -17,8 +17,8 @@ export default function UpdatePasswordForm() {
     event.preventDefault()
     setError('')
 
-    if (password.length < 12) {
-      setError('Yeni parola en az 12 karakter olmalı.')
+    if (password.length < 12 || password.length > 128) {
+      setError('Yeni parola 12–128 karakter olmalı.')
       return
     }
     if (password !== confirmation) {
@@ -55,6 +55,7 @@ export default function UpdatePasswordForm() {
         type="password"
         autoComplete="new-password"
         minLength={12}
+        maxLength={128}
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         required
@@ -66,6 +67,7 @@ export default function UpdatePasswordForm() {
         type="password"
         autoComplete="new-password"
         minLength={12}
+        maxLength={128}
         value={confirmation}
         onChange={(event) => setConfirmation(event.target.value)}
         required

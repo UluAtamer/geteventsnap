@@ -4,6 +4,8 @@ QR kod üzerinden fotoğraf ve videoları etkinlik sahibinin Google Drive hesab�
 
 ## Dokploy kurulumu
 
+Ayrıntılı, adım adım yükleme rehberi: [DOKPLOY.md](DOKPLOY.md).
+
 1. Dokploy projesinde uygulamaya özel bir **PostgreSQL** servisi oluşturup çalıştırın. Veritabanının **Internal Connection URL** değerini alın; **External Port** alanını boş bırakın. Dokploy’un kendi sistem veritabanını kullanmayın.
 2. Uygulama için Git deposunu bağlayın. **Application → Build Type: Dockerfile**, dosya `Dockerfile`, context `.` seçin. Alternatif olarak **Docker Compose** servisi oluşturup `compose.yaml` kullanabilirsiniz; bu dosya mevcut veritabanına `dokploy-network` üzerinden bağlanır ve yeni bir veritabanı oluşturmaz. Veritabanı ve uygulama aynı dahili ağda bulunmalıdır.
 3. Uygulamanın **Environment** bölümüne aşağıdaki değerleri girin. Bunlar container çalışma zamanı değerleridir; build argument değildir. Gerçek değerleri depoya veya Dockerfile’a yazmayın.
@@ -23,7 +25,7 @@ DRIVE_TOKEN_ENCRYPTION_KEY=<32 bayt Base64 anahtar>
 | Değişken | Kullanımı |
 | --- | --- |
 | `GOOGLE_REDIRECT_URI` | Boşsa `SITE_URL/api/google/drive/callback` kullanılır. Doluysa bu adresle aynı olmalı. |
-| `ADMIN_USER_ID` | Yönetici yapılacak hesabın UUID değeri. Boşsa yönetici erişimi kapalıdır. E-posta adresiyle yönetici yetkisi verilmez. |
+| `ADMIN_USER_ID` | Yönetici yapılacak hesabın UUID değeri. Alternatif olarak seed hesabına kalıcı yönetici rolü atanabilir. E-posta adresiyle yönetici yetkisi verilmez. |
 | `DATABASE_POOL_MAX` | Her uygulama işlemi için bağlantı sayısı; varsayılan 10. |
 | `GUEST_MAX_PHOTO_BYTES` | Varsayılan 26214400 (25 MB). |
 | `GUEST_MAX_VIDEO_BYTES` | Varsayılan 524288000 (500 MB). |
@@ -33,6 +35,8 @@ DRIVE_TOKEN_ENCRYPTION_KEY=<32 bayt Base64 anahtar>
 PostgreSQL bağlantısı sadece sunucu kodunda kullanılır. `DATABASE_URL` içindeki kullanıcıya yalnızca bu uygulamanın veritabanında yetki verin. Dahili Dokploy bağlantısı için SSL ayarı Dokploy’un verdiği URL’den gelir; TLS kullanılıyorsa sertifika doğrulamasını kapatmayın. Veritabanı yedeklerini Dokploy’da özel erişimle yapılandırın. Uygulama container’ında kalıcı dosya tutulmadığı için ayrıca volume gerekmez.
 
 Kurulum, Dokploy’un [veritabanı bağlantısı](https://docs.dokploy.com/docs/core/databases/connection) ve [Compose domain/ağ](https://docs.dokploy.com/docs/core/docker-compose/domains) belgelerindeki dahili ağ yaklaşımını kullanır.
+
+İlk deployda geçici kullanıcı oluşturmak için `SEED_USER_ENABLED=true`, `SEED_USER_EMAIL` ve `SEED_USER_PASSWORD` değerlerini Dokploy Environment’a ekleyin. Hesap mevcutsa değiştirilmez. Girişten sonra panelde **Parola değiştir** bağlantısını kullanın, seed’i kapatıp seed e-posta/parola değişkenlerini kaldırın. Ayrıntılar [yükleme rehberinde](DOKPLOY.md).
 
 ## Google Drive
 
