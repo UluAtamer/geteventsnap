@@ -23,14 +23,17 @@ export async function verifyPassword(password: string, encoded: string) {
 export async function userForSession(token?: string): Promise<User | null> {
   if (isUiPreview() || !token || !/^[a-f0-9]{64}$/.test(token)) return null
   const row = await database().prepare(`SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id
-    WHERE s.token_hash=? AND s.expires_at>? AND (u.banned_until IS NULL OR u.banned_until < ?)`).get(tokenHash(token), Date.now(), new Date().toISOString())
+    WHERE u.email_verified_at IS NOT NULL AND s.token_hash=? AND s.expires_at>? AND (u.banned_until IS NULL OR u.banned_until < ?)`).get(tokenHash(token), Date.now(), new Date().toISOString())
   return row ? publicUser(row) : null
 }
 export async function createSession(userId: string) {
   const db = database()
   const token = randomBytes(32).toString('hex')
   await db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now())
-  await db.prepare('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,?)').run(tokenHash(token), userId, Date.now() + SESSION_SECONDS * 1000)
+  const session = await db.prepare(`INSERT INTO sessions(token_hash,user_id,expires_at)
+    SELECT ?,id,? FROM users WHERE id=? AND email_verified_at IS NOT NULL
+    AND (banned_until IS NULL OR banned_until < ?) RETURNING user_id`).get(tokenHash(token), Date.now() + SESSION_SECONDS * 1000, userId, new Date().toISOString())
+  if (!session) throw new Error('Doğrulanmış bir hesap gerekiyor.')
   return token
 }
 export async function revokeSession(token?: string) {
@@ -40,11 +43,13 @@ export async function register(email: string, password: string) {
   const id = randomUUID()
   const hash = await hashPassword(password)
   const now = new Date().toISOString()
-  await transaction(async client => {
-    await client.query('INSERT INTO users(id,email,password_hash,created_at,last_sign_in_at) VALUES ($1,$2,$3,$4,$5)', [id, email, hash, now, now])
+  const created = await transaction(async client => {
+    const result = await client.query('INSERT INTO users(id,email,password_hash,created_at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id', [id, email, hash, now])
+    if (!result.rows.length) return false
     await client.query('INSERT INTO profiles(id,created_at) VALUES ($1,$2)', [id, now])
+    return true
   })
-  return publicUser({ id, email, created_at: now, last_sign_in_at: now })
+  return created ? publicUser({ id, email, created_at: now }) : null
 }
 export async function login(email: string, password: string) {
   const db = database()
@@ -52,7 +57,7 @@ export async function login(email: string, password: string) {
   // Perform the same expensive hash when the address is unknown.
   const dummy = 'scrypt:00000000000000000000000000000000:' + '00'.repeat(64)
   const valid = await verifyPassword(password, String(row?.password_hash || dummy))
-  if (!valid || !row || (row.banned_until && String(row.banned_until) > new Date().toISOString())) return null
+  if (!valid || !row || !row.email_verified_at || (row.banned_until && String(row.banned_until) > new Date().toISOString())) return null
   await db.prepare('UPDATE users SET last_sign_in_at=? WHERE id=?').run(new Date().toISOString(), row.id)
   return publicUser(row)
 }

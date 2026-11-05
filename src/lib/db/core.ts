@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 export type Row = Record<string, any>
 export type DbError = { message: string; code: string } | null
 export type Result<T> = { data: T; error: DbError }
-export type User = { id: string; is_admin: boolean; email: string; created_at: string; banned_until?: string; last_sign_in_at?: string }
+export type User = { id: string; is_admin: boolean; email_verified_at: string | null; email: string; created_at: string; banned_until?: string; last_sign_in_at?: string }
 let pool: pg.Pool | undefined
 
 function connectionPool() {
@@ -55,7 +55,7 @@ export async function transaction<T>(operation: (client: pg.PoolClient) => Promi
 }
 
 export function publicUser(row: Row): User {
-  return { id: row.id, is_admin: row.is_admin === true, email: row.email, created_at: row.created_at,
+  return { id: row.id, is_admin: row.is_admin === true, email_verified_at: row.email_verified_at || null, email: row.email, created_at: row.created_at,
     banned_until: row.banned_until || undefined, last_sign_in_at: row.last_sign_in_at || undefined }
 }
 

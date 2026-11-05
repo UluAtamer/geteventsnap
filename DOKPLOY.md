@@ -1,6 +1,6 @@
 # GetEventSnap — Dokploy yükleme rehberi
 
-Bu rehber, uygulamayı **Dockerfile** ile, Dokploy’daki ayrı bir **PostgreSQL** servisine bağlayarak yayınlar. Gizli değerler Dokploy Environment’ta tutulur. Yerel önizleme modu üretimde kullanılmaz.
+Bu rehber, uygulamayı **Dockerfile** ile, Dokploy’daki ayrı bir **PostgreSQL** servisine bağlayarak yayınlar. Gizli değerler Dokploy Environment’ta tutulur. Kayıt onay e-postaları için ayrıca SMTP hesabı gerekir. Yerel önizleme modu üretimde kullanılmaz.
 
 ## 1. Güncel kodu depoya gönder
 
@@ -90,6 +90,12 @@ GOOGLE_REDIRECT_URI=https://etkinlik.example.com/api/google/drive/callback
 ADMIN_USER_ID=
 GUEST_MAX_PHOTO_BYTES=26214400
 GUEST_MAX_VIDEO_BYTES=524288000
+SMTP_HOST=<e-posta sağlayıcının SMTP sunucusu>
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=<SMTP kullanıcı adı>
+SMTP_PASSWORD=<SMTP parolası>
+SMTP_FROM=<gönderici e-posta adresi>
 ```
 
 Ayrı bir Drive şifreleme anahtarı üretmen gerekmez. Kullanıcı token’ları `GOOGLE_CLIENT_SECRET` değerinden türetilen anahtarla şifreli tutulur. Google istemci sırrı değiştirilirse kullanıcılar Drive’larını yeniden bağlamalıdır. Önceki sürümde bağlanan hesaplar bu güncellemede yeniden yetkilendirme ister; mevcut Drive klasörleri korunur.
@@ -102,6 +108,16 @@ Ayrı bir Drive şifreleme anahtarı üretmen gerekmez. Kullanıcı token’lar�
 - `NODE_ENV=production`, `PORT=3000` ve `HOSTNAME=0.0.0.0` Dockerfile’da zaten ayarlı.
 
 Environment değişikliklerini kaydet. Sonraki değişikliklerde yeni değerlerin uygulanması için yeniden deploy et.
+
+## Kayıt onay e-postalarını etkinleştir
+
+SMTP bilgilerini e-posta sağlayıcının panelinden al. `SMTP_FROM` alanına sadece e-posta adresini yaz; uygulama gönderici adını GetEventSnap olarak ekler. Port 465 için `SMTP_SECURE=true`, port 587 için `SMTP_SECURE=false` kullan; ikinci durumda STARTTLS zorunludur. Sunucunun seçilen SMTP portuna dışarı bağlantı kurabilmesi gerekir. SPF ve DKIM kayıtlarını e-posta sağlayıcının verdiği değerlerle ayarla. [Nodemailer SMTP belgesi](https://nodemailer.com/smtp)
+
+SMTP bilgileri eksik olduğunda web sunucusu durmaz; yeni kayıt ve onay gönderimi kapalı kalır. Dolu fakat hatalı bilgilerde kayıt ekranında gönderim hatası görünür; loglarda SMTP parolası veya onay bağlantısı yazdırılmaz.
+
+Kayıt testi: `/kayit` üzerinden yeni bir adresle kayıt ol. Onay öncesinde oturum açılmamalı. Gelen e-postadaki bağlantıyı açıp **E-posta adresimi onayla ve devam et** düğmesine bas; ardından panel açılmalı. Kullanılmış bağlantı yeniden kabul edilmemeli. E-posta gelmezse giriş/kayıt ekranındaki **Onay e-postasını tekrar gönder** bağlantısını kullan. Onay bağlantıları 30 dakika geçerlidir; tekrar gönderme dakikada bir ve saatte en fazla beş kez yapılır.
+
+Önceki normal kullanıcıların da e-postalarını onaylaması gerekir; eski oturumları geçersizleşir. Mevcut yöneticiler ve operatörün seed hesapları korunur.
 
 ## İlk deploy için geçici kullanıcı
 
@@ -160,7 +176,7 @@ Beklenen yanıt:
 
 Ardından:
 
-1. `/kayit` üzerinden kendi hesabını oluştur.
+1. `/kayit` üzerinden kendi hesabını oluştur ve gelen e-postadaki bağlantıdan onayla.
 2. Çıkış yapıp `/giris` üzerinden yeniden giriş yap.
 3. `/dashboard` içinde etkinlik oluştur.
 4. Google Drive bağlantısını başlat ve kendi hesabınla izin ver.
@@ -190,6 +206,14 @@ Kendi hesabına giriş yaptıktan sonra aynı tarayıcıda `/api/auth/user` adre
 
 Dokploy Environment’ta `ADMIN_USER_ID` değerine bu UUID’yi yazıp yeniden deploy et. Aynı hesapla giriş yapınca `/admin` erişimi açılır. E-posta adresi veya üye kodu bu alana yazılmaz.
 
+## Tanışma özelliği
+
+Güncel kodu deploy edince `005_restore_dating.sql` otomatik uygulanır. Etkinlik sahibi `/dashboard` içinden **Tanışma → Aç** düğmesine basar. Misafirler o etkinliğin QR sayfasından 18 yaş ve açık rıza onayıyla profil oluşturabilir. Özellik yalnızca etkinlik günü Türkiye saatine göre çalışır; yeni etkinliklerde kapalıdır.
+
+Profil/fotoğraf erişimi aynı etkinlikteki katılımcı oturumlarıyla sınırlıdır; iletişim bilgileri karşılıklı eşleşmede açılır. Etkinlik sahibi panelde **Bildirilen profilleri incele** bölümünden moderasyon yapabilir. Docker içindeki temizlik işlemi gün sonrasında profil, fotoğraf ve bildirimleri her dakika kontrol ederek siler. Ek bir zamanlayıcı veya environment anahtarı gerekmez.
+
+Canlı testte iki ayrı tarayıcı profiliyle katıl, karşılıklı beğeniyle eşleşmeyi kontrol et. Oturumsuz fotoğraf isteği reddedilmeli; engellemeden sonra karşı tarafın fotoğrafı ve iletişim bilgileri erişilememeli.
+
 ## 10. Verileri koru ve güncelle
 
 Uygulamanın kalıcı verileri PostgreSQL’de, misafir fotoğraf/videoları Google Drive’da tutulur. Uygulama container’ı için ayrıca kalıcı volume gerekmez. PostgreSQL servisi için kalıcı disk ve özel erişimli yedekleme ayarlarını koru.
@@ -209,6 +233,14 @@ Güncellemede kodu bağlı dala gönderip yeniden deploy et. Veritabanı servisi
 | Google `redirect_uri_mismatch` | Google istemcisindeki callback ile `SITE_URL`/`GOOGLE_REDIRECT_URI` değerlerini eşleştir. |
 | Drive erişimi reddediliyor | Doğru OAuth istemcisi, izin kapsamı ve Google test/yayın erişimini kontrol et. |
 | Eski Drive bağlantısı okunamıyor | Panelden Google Drive’ı yeniden bağla. Google istemci sırrı değiştiyse yeniden yetkilendirme gerekir. |
+
+## Google 400 redirect_uri_mismatch hatasını doğrula
+
+Yönetici hesabıyla `/admin` sayfasındaki **Google Drive bağlantı ayarlarını kontrol et** bölümünü aç. Burada canlı container’ın kullandığı gerçek Client ID, Authorized redirect URI ve JavaScript origin gösterilir. Aynı bilgiler `/api/google/drive/config` adresinde yalnızca yönetici oturumuna döner. Ziyaretçiler 401, normal üyeler 403 alır; yanıt önbelleğe alınmaz. Client Secret, erişim/yenileme token’ları, kullanıcı e-postaları ve diğer özel bilgiler bu ekranda veya yanıtta bulunmaz.
+
+Google Cloud → Google Auth Platform → Clients içinde **ekranda görünen Client ID ile aynı** Web application istemcisini seç. Ekrandaki `redirectUri` değerini **Authorized redirect URIs** listesine birebir ekle; JavaScript origins alanına yazma. `www`, HTTPS ve sondaki slash farkı olmamalı. Kaydedip uygulamanın panelinden yeni bir bağlantı isteği başlat; önceki Google hata sekmesini tekrar kullanma.
+
+Dokploy’da `SITE_URL=https://www.geteventsnap.com` kullanıyorsan dönüş adresi `https://www.geteventsnap.com/api/google/drive/callback` olmalıdır. `GOOGLE_REDIRECT_URI` boş bırakılabilir; uygulama doğru yolu `SITE_URL` üzerinden üretir. Doluysa aynı değeri taşımalıdır. Bu ekrandaki değişiklikler Google Cloud’a otomatik kaydedilmez; Google istemcisi tarafındaki izinli adres listesi ayrıca güncellenmelidir.
 
 ## Compose seçeneği
 

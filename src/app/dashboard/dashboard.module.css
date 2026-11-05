@@ -637,3 +637,7 @@
     padding: 18px;
   }
 }
+
+.datingControl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.datingControl strong { color: #6537e8; }
+.datingControl button { margin-left: auto; padding: 7px 14px; border: 1px solid #6537e8; border-radius: 99px; color: #6537e8; background: white; cursor: pointer; }

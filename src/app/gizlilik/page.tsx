@@ -35,13 +35,14 @@ export default function PrivacyPage() {
         <section>
           <h2>Verilerin gizliliği</h2>
           <p>Kullanıcı hesapları, parola özetleri, oturumlar ve etkinlik bilgileri uygulamanın özel PostgreSQL veritabanında tutulur. Parolalar açık metin olarak saklanmaz. Yüklenen özel kapaklar yalnızca hesap sahibinin oturumuyla okunabilir.</p>
+          <p>Tanışma isteğe bağlıdır ve 18 yaş ve üzeri katılımcılara açıktır. Takma ad, yaş, fotoğraf ve isteğe bağlı tanıtım yalnızca aynı etkinlikte açık rızayla katılan misafirlere gösterilir. İsteğe bağlı telefon veya Instagram bilgisi yalnızca karşılıklı eşleşmede paylaşılır. Profil sahibi profilini silebilir; engelleme ve etkinlik sahibine bildirme seçenekleri vardır. Profiller, fotoğraflar ve bildirimler etkinlik günü sonrasında temizlenir.</p>
           <p>Misafir sayfasında hesap e-postası, etkinlik adı, adresi, özel kapak veya katılımcı profili yayınlanmaz. Misafirler yalnızca kendi tarayıcı kimlikleriyle yükledikleri dosyalara erişebilir. Etkinlik bağlantısını yalnızca davetlilerinizle paylaşın.</p>
         </section>
 
         <section>
           <h2>Google Drive ve üçüncü taraf hizmetler</h2>
           <p>Etkinlik sahibi Google Drive’ını bağladığında GetEventSnap, Google’ın izin ekranında belirtilen Drive kapsamını kullanır ve etkinlik klasörünü sahibinin hesabında oluşturur. Google hesabı ve Drive kullanımı Google’ın gizlilik şartlarına da tabidir.</p>
-          <p>Google Drive dışındaki hesap, veritabanı ve dosya işlemleri uygulama sunucusu ve özel veritabanında yapılır. Google Drive klasörüne uygulama tarafından herkese açık paylaşım izni verilmez.</p>
+          <p>Kayıt onayı için e-posta adresi ve tek kullanımlık onay bağlantısı yapılandırılmış SMTP hizmetiyle gönderilir. Diğer hesap, veritabanı ve dosya işlemleri uygulama sunucusu ve özel veritabanında yapılır. Google Drive klasörüne uygulama tarafından herkese açık paylaşım izni verilmez.</p>
         </section>
 
         <section>

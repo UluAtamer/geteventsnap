@@ -23,3 +23,7 @@ try {
   console.error(error instanceof TypeError ? 'Environment adres biçimi geçersiz.' : error.message)
   process.exit(1)
 }
+
+if (['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'].some(name => !process.env[name]?.trim())) {
+  console.warn('[E-posta] SMTP ayarları eksik; yeni kayıt ve onay e-postası gönderimi kapalı. Web sunucusu başlatılacak.')
+}

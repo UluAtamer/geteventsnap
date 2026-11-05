@@ -17,7 +17,7 @@ export async function seedUser(client, environment = process.env) {
   await client.query('BEGIN')
   try {
     await client.query('SELECT pg_advisory_xact_lock(726283902)')
-    const existing = await client.query('SELECT id, password_hash, is_admin FROM users WHERE lower(email)=$1 FOR UPDATE', [email])
+    const existing = await client.query('SELECT id, password_hash, is_admin, email_verified_at FROM users WHERE lower(email)=$1 FOR UPDATE', [email])
     if (existing.rows.length) {
       const user = existing.rows[0]
       if (isAdmin && !user.is_admin) {
@@ -28,9 +28,16 @@ export async function seedUser(client, environment = process.env) {
         if (algorithm !== 'scrypt' || expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
           throw new Error('Yönetici yetkisi için mevcut hesap parolası doğrulanamadı.')
         }
-        await client.query('UPDATE users SET is_admin=TRUE WHERE id=$1', [user.id])
+        await client.query('UPDATE users SET is_admin=TRUE, email_verified_at=COALESCE(email_verified_at,$2) WHERE id=$1', [user.id, new Date().toISOString()])
         await client.query('COMMIT')
         return 'promoted'
+      }
+      if (!user.email_verified_at) {
+        const [algorithm, salt, value] = user.password_hash.split(':')
+        const expected = Buffer.from(value || '', 'hex')
+        const actual = salt ? await deriveKey(password, salt, 64) : Buffer.alloc(0)
+        if (algorithm !== 'scrypt' || expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error('Seed hesabı doğrulanamadı.')
+        await client.query('UPDATE users SET email_verified_at=$1 WHERE id=$2', [new Date().toISOString(), user.id])
       }
       await client.query('COMMIT')
       return 'exists'
@@ -40,7 +47,7 @@ export async function seedUser(client, environment = process.env) {
     const encoded = `scrypt:${salt}:${hash.toString('hex')}`
     const id = randomUUID()
     const now = new Date().toISOString()
-    await client.query('INSERT INTO users(id,email,password_hash,created_at,is_admin) VALUES ($1,$2,$3,$4,$5)', [id, email, encoded, now, isAdmin])
+    await client.query('INSERT INTO users(id,email,password_hash,created_at,is_admin,email_verified_at) VALUES ($1,$2,$3,$4,$5,$4)', [id, email, encoded, now, isAdmin])
     await client.query('INSERT INTO profiles(id,created_at) VALUES ($1,$2)', [id, now])
     await client.query('COMMIT')
     return 'created'

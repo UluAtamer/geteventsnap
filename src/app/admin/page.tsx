@@ -1,3 +1,4 @@
+import { getGoogleDriveSetupInfo } from '@/lib/google-oauth-config'
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/admin-auth'
 import { getMemberCode } from '@/lib/member-code'
@@ -45,6 +46,8 @@ const notices: Record<string, string> = {
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
   const currentAdmin = await requireAdmin()
+  let googleSetup: ReturnType<typeof getGoogleDriveSetupInfo> | null = null
+  try { googleSetup = getGoogleDriveSetupInfo(process.env.SITE_URL || 'http://localhost:3002') } catch { /* No credentials or malformed environment values are rendered. */ }
   const params = await searchParams
   const query = (Array.isArray(params.q) ? params.q[0] : params.q ?? '').trim().toLocaleLowerCase('tr-TR')
   const noticeKey = Array.isArray(params.notice) ? params.notice[0] : params.notice
@@ -136,6 +139,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <p className={styles.intro}>Giriş yapan yönetici: {currentAdmin.email}</p>
 
         {noticeKey && notices[noticeKey] && <p className={styles.notice} role="status">{notices[noticeKey]}</p>}
+
+        <details className={styles.notice}>
+          <summary>Google Drive bağlantı ayarlarını kontrol et</summary>
+          {googleSetup ? (
+            <div>
+              <p>Google Cloud’da aşağıdaki Client ID’ye ait Web application istemcisini açın.</p>
+              <p>Client ID: <code>{googleSetup.clientId}</code></p>
+              <p>Authorized redirect URIs: <code>{googleSetup.redirectUri}</code></p>
+              <p>Authorized JavaScript origins: <code>{googleSetup.authorizedJavaScriptOrigin}</code></p>
+              <p>Dönüş adresini Google Cloud’a birebir kaydedin. Ardından kullanıcı panelinden Drive bağlantısını yeniden başlatın.</p>
+            </div>
+          ) : <p>Google OAuth ayarları eksik veya tutarsız. Dokploy’daki SITE_URL ve Google ayarlarını kontrol edin.</p>}
+        </details>
 
         <div className={styles.stats}>
           <div><strong>{users.length}</strong><span>Kayıtlı üye</span></div>

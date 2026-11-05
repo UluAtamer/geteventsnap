@@ -21,7 +21,7 @@ COPY --from=builder --chown=app:app /app/.next/standalone ./
 COPY --from=builder --chown=app:app /app/.next/static ./.next/static
 COPY --from=builder --chown=app:app /app/public ./public
 COPY --from=builder --chown=app:app /app/db ./db
-COPY --from=builder --chown=app:app /app/scripts/migrate.mjs /app/scripts/validate-env.mjs /app/scripts/docker-entrypoint.sh /app/scripts/seed-user.mjs ./scripts/
+COPY --from=builder --chown=app:app /app/scripts/migrate.mjs /app/scripts/validate-env.mjs /app/scripts/docker-entrypoint.sh /app/scripts/seed-user.mjs /app/scripts/dating-cleanup.mjs ./scripts/
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

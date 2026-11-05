@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/db/client'
 import styles from './AuthForm.module.css'
@@ -46,7 +47,7 @@ export default function AuthForm({ mode, preview = false }: AuthFormProps) {
           return
         }
 
-        setStatus('Hesabınız oluşturuldu. Giriş yapabilirsiniz.')
+        setStatus('Devam etmek için e-postanıza gönderilen onay bağlantısını açın. Gelen kutunuzu ve spam klasörünü kontrol edin.')
         return
       }
 
@@ -99,6 +100,7 @@ export default function AuthForm({ mode, preview = false }: AuthFormProps) {
       <button className={styles.button} type="submit" disabled={isSubmitting || preview}>
         {isSubmitting ? 'Lütfen bekleyin…' : isSignup ? 'Hesap oluştur' : 'Giriş yap'}
       </button>
+      {!preview && <Link className={styles.resetLink} href="/eposta-onay">Onay e-postasını tekrar gönder</Link>}
       {!isSignup && <p className={styles.status}>Parolanızı unuttuysanız sunucu yöneticisinden hesap kurtarma talep edin.</p>}
     </form>
   )

@@ -13,5 +13,6 @@ until node scripts/migrate.mjs; do
   sleep 3
 done
 node scripts/seed-user.mjs
+node scripts/dating-cleanup.mjs &
 echo '[Başlangıç] Web sunucusu başlatılıyor.'
 exec node server.js

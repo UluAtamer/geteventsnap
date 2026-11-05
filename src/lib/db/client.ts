@@ -13,6 +13,8 @@ export function createClient() {
   return {
     auth: {
       getUser: () => authRequest('user'),
+      verifyEmail: (token: string) => authRequest('verify-email', { token }),
+      resendVerification: (email: string) => authRequest('resend-verification', { email }),
       signUp: (body: { email: string; password: string; options?: unknown }) => authRequest('signup', body),
       signInWithPassword: (body: { email: string; password: string }) => authRequest('login', body),
       updateUser: (body: { password: string; currentPassword: string }) => authRequest('password', body),

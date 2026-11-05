@@ -7,6 +7,10 @@ const settings = {
   SITE_URL: 'https://example.invalid',
   GOOGLE_CLIENT_ID: 'test-only-client-id',
   GOOGLE_CLIENT_SECRET: 'test-only-client-secret',
+  SMTP_HOST: 'smtp.example.invalid',
+  SMTP_USER: 'test-smtp-user',
+  SMTP_PASSWORD: 'test-smtp-password',
+  SMTP_FROM: 'noreply@example.invalid',
 }
 const validate = overrides => spawnSync(process.execPath, ['scripts/validate-env.mjs'], {
   env: { ...settings, ...overrides }, encoding: 'utf8',
@@ -30,4 +34,12 @@ test('Dokploy runtime settings validate without printing credentials', () => {
     const output = result.stdout + result.stderr
     for (const value of Object.values(settings)) assert.ok(!output.includes(value))
   }
+})
+
+
+test('missing SMTP reports disabled mail without stopping the application', () => {
+  const result = validate({ SMTP_HOST: '', SMTP_PASSWORD: '' })
+  assert.equal(result.status, 0)
+  assert.match(result.stderr, /SMTP ayarları eksik/)
+  for (const secret of Object.values(settings)) assert.ok(!result.stderr.includes(secret))
 })

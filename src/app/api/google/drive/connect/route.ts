@@ -49,8 +49,8 @@ export async function GET(request: Request) {
   try {
     oauthConfig = getGoogleDriveOAuthConfig(requestUrl.origin)
     admin = createAdminClient()
-  } catch (error) {
-    console.error('Google Drive sunucu ayarları geçersiz:', error)
+  } catch {
+    console.error('Google Drive sunucu ayarları geçersiz. SITE_URL ve OAuth ayarlarını kontrol edin.')
     return dashboardRedirect(requestUrl, 'setup_required')
   }
 

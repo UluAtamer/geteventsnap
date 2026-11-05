@@ -1,34 +1,11 @@
 import 'server-only'
 
-import { getPublicAppUrl } from '@/lib/site-url'
+import type { GoogleDriveOAuthConfig } from '@/lib/google-oauth-config'
+export { getGoogleDriveOAuthConfig, hasGoogleDriveServerConfig } from '@/lib/google-oauth-config'
 
 export { encryptGoogleRefreshToken, decryptGoogleRefreshToken } from '@/lib/drive-crypto'
 
 type JsonObject = Record<string, unknown>
-
-export type GoogleDriveOAuthConfig = {
-  clientId: string
-  clientSecret: string
-  redirectUri: string
-}
-
-export function hasGoogleDriveServerConfig() {
-  return Boolean(process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim())
-}
-
-export function getGoogleDriveOAuthConfig(origin: string): GoogleDriveOAuthConfig {
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-  if (!clientId || !clientSecret) {
-    throw new Error('Google OAuth bilgileri yapılandırılmamış.')
-  }
-
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI ||
-      getPublicAppUrl('/api/google/drive/callback', new URL(origin)).toString()
-  const parsedRedirectUri = new URL(redirectUri)
-
-  return { clientId, clientSecret, redirectUri: parsedRedirectUri.toString() }
-}
 
 async function readJson(response: Response): Promise<JsonObject> {
   let payload: unknown

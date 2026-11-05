@@ -2,7 +2,7 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  serverExternalPackages: ['pg'],
+  serverExternalPackages: ['pg', 'nodemailer'],
   async headers() {
     return [
       {
@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
           { key: 'Content-Security-Policy', value: `default-src 'self'; script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'` },
         ],
       },
-      ...['/api/:path*', '/dashboard/:path*', '/admin/:path*', '/e/:path*', '/sifre-yenile'].map(source => ({
+      ...['/api/:path*', '/dashboard/:path*', '/admin/:path*', '/e/:path*', '/sifre-yenile', '/eposta-onay'].map(source => ({
         source,
         headers: [
           { key: 'Cache-Control', value: 'private, no-store' },

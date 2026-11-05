@@ -27,6 +27,9 @@ try {
     await client.query('INSERT INTO schema_migrations(version,checksum) VALUES ($1,$2)', [version, checksum])
     console.log(`Migration uygulandı: ${version}`)
   }
+  if (/^[a-f0-9-]{36}$/i.test(process.env.ADMIN_USER_ID || '')) {
+    await client.query('UPDATE users SET email_verified_at=COALESCE(email_verified_at,$1) WHERE id=$2', [new Date().toISOString(), process.env.ADMIN_USER_ID])
+  }
   await client.query('COMMIT')
   console.log('[Veritabanı] Şema kontrolü tamamlandı; veritabanı hazır.')
 } catch {

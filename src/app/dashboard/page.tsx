@@ -1,6 +1,7 @@
 import BrandLogo from '@/components/brand/BrandLogo'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import DatingReportsManager from '@/components/events/DatingReportsManager'
 import CreateEventForm from '@/components/events/CreateEventForm'
 import EventShareCard from '@/components/events/EventShareCard'
 import EditEventForm from '@/components/events/EditEventForm'
@@ -9,7 +10,7 @@ import { getMemberCode } from '@/lib/member-code'
 import { isAdminUser } from '@/lib/admin-access'
 import { hasGoogleDriveServerConfig } from '@/lib/google-drive'
 import { createAdminClient } from '@/lib/db/admin'
-import { deleteOwnedEvent, signOut } from './actions'
+import { deleteOwnedEvent, signOut, updateDatingEnabled } from './actions'
 import { createClient } from '@/lib/db/server'
 import styles from './dashboard.module.css'
 
@@ -55,6 +56,7 @@ type EventRecord = {
   slug: string
   welcome_message: string
   cover_image_url: string | null
+  dating_enabled: boolean
 }
 
 type UploadStats = {
@@ -72,6 +74,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     event_deleted: 'Etkinlik ve uygulamadaki ilişkili kayıtları silindi. Google Drive’daki dosyalar etkilenmedi.',
     event_delete_confirmation: 'Silmek için onay alanına ETKİNLİĞİ SİL yazın.',
     event_delete_failed: 'Etkinlik silinemedi. Sunucu kayıtlarında hata ayrıntısı bulunuyor; lütfen tekrar deneyin.',
+    dating_saved: 'Tanışma ayarı kaydedildi.',
+    settings_save_failed: 'Tanışma ayarı kaydedilemedi.',
     settings_invalid: 'Etkinlik ayarı geçerli değildi. Lütfen panelden tekrar deneyin.',
     event_updated: 'Etkinlik bilgileri güncellendi.',
     event_update_invalid: 'Etkinlik tarihi, saati veya açıklaması geçerli değil. Alanları kontrol edip tekrar deneyin.',
@@ -88,7 +92,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const { data, error } = await database
     .from('events')
-    .select('id, title, event_date, event_time, event_address, event_type, slug, welcome_message, cover_image_url')
+    .select('id, title, event_date, event_time, event_address, event_type, slug, welcome_message, cover_image_url, dating_enabled')
     .order('created_at', { ascending: false })
 
   const events = (data ?? []) as EventRecord[]
@@ -279,6 +283,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         />
                       </details>
                       <div className={styles.eventControls}>
+                        <form action={updateDatingEnabled} className={styles.datingControl}>
+                          <input type="hidden" name="eventId" value={event.id} />
+                          <input type="hidden" name="enabled" value={event.dating_enabled ? 'false' : 'true'} />
+                          <span>Tanışma</span>
+                          <strong>{event.dating_enabled ? 'Açık' : 'Kapalı'}</strong>
+                          <button type="submit" role="switch" aria-checked={event.dating_enabled}>
+                            {event.dating_enabled ? 'Kapat' : 'Aç'}
+                          </button>
+                        </form>
+                        <p className={styles.controlNote}>18 yaş ve üzeri misafirler açık rızayla katılır. Yalnızca etkinlik günü kullanılabilir; profiller gün sonunda silinir.</p>
+                        <DatingReportsManager eventId={event.id} />
                         <span className={`${styles.eventStatus} ${statusClass}`}>{statusLabel}</span>
                         {stats && (
                           <>

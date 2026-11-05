@@ -185,3 +185,19 @@ export async function signOut() {
 
   redirect('/giris')
 }
+
+
+export async function updateDatingEnabled(formData: FormData) {
+  const eventId = String(formData.get('eventId') || '')
+  const enabled = String(formData.get('enabled') || '')
+  if (!eventIdPattern.test(eventId) || !['true','false'].includes(enabled)) redirect('/dashboard?panel=settings_invalid')
+  const client = await createClient()
+  const { data: { user } } = await client.auth.getUser()
+  if (!user) redirect('/giris')
+  const { data,error } = await client.from('events').update({ dating_enabled: enabled === 'true' })
+    .eq('id',eventId).eq('owner_id',user.id).select('id,slug').maybeSingle()
+  if (error || !data) redirect('/dashboard?panel=settings_save_failed')
+  revalidatePath('/dashboard')
+  revalidatePath(`/e/${data.slug}`)
+  redirect('/dashboard?panel=dating_saved')
+}

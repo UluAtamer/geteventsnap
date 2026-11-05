@@ -22,9 +22,10 @@ writeFileSync(join(directory, 'pg-test-adapter.mjs'), `
 `)
 process.env.DATABASE_URL = 'postgresql://unused/isolated-test'
 writeFileSync(join(directory, 'ui-preview.mjs'), ts.transpileModule(readFileSync('src/lib/ui-preview.ts', 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
-for (const name of ['core', 'auth']) {
+for (const name of ['core', 'auth', 'email-verification']) {
   const source = readFileSync(resolve(`src/lib/db/${name}.ts`), 'utf8')
     .replace("from './core'", "from './core.mjs'")
+    .replace("from './auth'", "from './auth.mjs'")
     .replace("from '../ui-preview'", "from './ui-preview.mjs'")
     .replace("from 'pg'", "from './pg-test-adapter.mjs'")
   writeFileSync(join(directory, `${name}.mjs`), ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
@@ -35,9 +36,27 @@ try {
   await engine.exec(readFileSync('db/migrations/001_initial.sql', 'utf8'))
   await engine.exec(readFileSync('db/migrations/002_admin_role.sql', 'utf8'))
   await engine.exec(readFileSync('db/migrations/003_drive_token_format.sql', 'utf8'))
+  await engine.exec(readFileSync('db/migrations/004_email_verification.sql', 'utf8'))
+  await engine.exec(readFileSync('db/migrations/005_restore_dating.sql', 'utf8'))
 } catch (error) { throw new Error(error.message) }
 const { database, Query, rpc, consumeRateLimit } = await import(pathToFileURL(join(directory, 'core.mjs')).href)
-const { register, login, createSession, userForSession, revokeSession, changePassword, userAdmin } = await import(pathToFileURL(join(directory, 'auth.mjs')).href)
+const { register: registerPending, login, createSession, userForSession, revokeSession, changePassword, userAdmin } = await import(pathToFileURL(join(directory, 'auth.mjs')).href)
+const { issueEmailVerification, confirmEmail, discardEmailVerification } = await import(pathToFileURL(join(directory, 'email-verification.mjs')).href)
+async function register(email, password) {
+  const user = await registerPending(email, password)
+  assert.ok(user)
+  const now = new Date().toISOString()
+  await database().prepare('UPDATE users SET email_verified_at=? WHERE id=?').run(now, user.id)
+  return { ...user, email_verified_at: now }
+}
+globalThis.testMailbox = []
+writeFileSync(join(directory, 'mail.mjs'), `
+export function isMailConfigured() { return globalThis.testMailConfigured !== false; }
+export async function sendVerificationEmail(email, token) {
+  if (globalThis.testMailFailure) throw new Error('simulated SMTP failure');
+  globalThis.testMailbox.push({ email, token });
+}
+`)
 after(async () => { await database().close(); await engine.close(); rmSync(directory, { recursive: true, force: true }) })
 const password = 'A-private-password-4321'
 let alice, bob
@@ -124,6 +143,9 @@ async function loadRoute(file, name) {
     .replace("from '@/lib/db/core'", "from './core.mjs'")
     .replace("from '@/lib/ui-preview'", "from './ui-preview.mjs'")
     .replace("from '@/lib/db/auth'", "from './auth.mjs'")
+    .replace("from '@/lib/db/email-verification'", "from './email-verification.mjs'")
+    .replace("from '@/lib/mail'", "from './mail.mjs'")
+    .replace("from '@/lib/dating-server'", "from './dating-server.mjs'")
     .replace("from '@/lib/request-origin'", "from './origin.mjs'")
   writeFileSync(join(directory, `${name}.mjs`), ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
   return import(pathToFileURL(join(directory, `${name}.mjs`)).href)
@@ -140,7 +162,15 @@ test('auth and private-file endpoints enforce runtime origin, cookies, identity 
   const context = action => ({ params: Promise.resolve({ action }) })
   const rejected = await auth.POST(authRequest('signup', { email: 'route@example.test', password }, 'https://untrusted.example.test'), context('signup'))
   assert.equal(rejected.status, 403)
-  const response = await auth.POST(authRequest('signup', { email: 'route@example.test', password }), context('signup'))
+  const signup = await auth.POST(authRequest('signup', { email: 'route@example.test', password }), context('signup'))
+  assert.equal(signup.status, 200)
+  const signupPayload = await signup.json()
+  assert.equal(signupPayload.data.session, null)
+  assert.equal(signup.headers.get('set-cookie'), null)
+  assert.equal(await login('route@example.test', password), null)
+  const mail = globalThis.testMailbox.find(item => item.email === 'route@example.test')
+  assert.ok(mail)
+  const response = await auth.POST(authRequest('verify-email', { token: mail.token }), context('verify-email'))
   assert.equal(response.status, 200)
   const payload = await response.json()
   assert.ok(!JSON.stringify(payload).includes('password_hash'))
@@ -191,6 +221,7 @@ test('guest HTML and client props omit event names, addresses, email and private
   writeFileSync(join(directory, 'window.mjs'), ts.transpileModule(windowSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
   let page = readFileSync('src/app/e/[slug]/page.tsx', 'utf8')
     .replace("import { notFound } from 'next/navigation'", "function notFound() { throw new Error('not found') }")
+    .replace("import DatingModule from '@/components/events/DatingModule'", "function DatingModule(props) { return React.createElement('div', { 'data-dating-enabled': props.enabled }) }")
     .replace("import GuestUploadForm from '@/components/events/GuestUploadForm'", "function GuestUploadForm(props) { return React.createElement('div', { 'data-client-props': JSON.stringify(props) }) }")
     .replace("import { getGuestUploadLimits } from '@/lib/guest-upload'", "function getGuestUploadLimits() { return { photoBytes: 10, videoBytes: 20 } }")
     .replace("from '@/lib/event-upload-window'", "from './window.mjs'")
@@ -210,7 +241,7 @@ test('guest HTML and client props omit event names, addresses, email and private
 test('deployment migration runner is repeatable and tracks the applied schema', async () => {
   mkdirSync(join(directory, 'scripts'))
   mkdirSync(join(directory, 'db', 'migrations'), { recursive: true })
-  for (const version of ['001_initial.sql', '002_admin_role.sql', '003_drive_token_format.sql']) {
+  for (const version of ['001_initial.sql', '002_admin_role.sql', '003_drive_token_format.sql', '004_email_verification.sql', '005_restore_dating.sql']) {
     writeFileSync(join(directory, 'db', 'migrations', version), readFileSync(`db/migrations/${version}`))
   }
   const source = readFileSync('scripts/migrate.mjs', 'utf8').replace("from 'pg'", "from '../pg-test-adapter.mjs'")
@@ -228,7 +259,7 @@ test('deployment migration runner is repeatable and tracks the applied schema', 
   assert.ok(!messages.join('\n').includes(process.env.DATABASE_URL))
   assert.equal(process.exitCode || 0, 0)
   const versions = await database().prepare('SELECT version FROM schema_migrations ORDER BY version').all()
-  assert.deepEqual(versions.map(row => row.version), ['001_initial.sql', '002_admin_role.sql', '003_drive_token_format.sql'])
+  assert.deepEqual(versions.map(row => row.version), ['001_initial.sql', '002_admin_role.sql', '003_drive_token_format.sql', '004_email_verification.sql', '005_restore_dating.sql'])
 })
 
 test('first-deployment seed is opt-in, hashed and never resets an existing account password', async () => {
@@ -311,8 +342,11 @@ test('public registration cannot assign itself an administrator role', async () 
   })
   const response = await auth.POST(request, { params: Promise.resolve({ action: 'signup' }) })
   assert.equal(response.status, 200)
-  assert.equal((await response.json()).data.user.is_admin, false)
-  assert.equal((await login('role-injection@example.test', password)).is_admin, false)
+  assert.equal((await response.json()).data.user, null)
+  const row = await database().prepare('SELECT is_admin,email_verified_at FROM users WHERE email=?').get('role-injection@example.test')
+  assert.equal(row.is_admin, false)
+  assert.equal(row.email_verified_at, null)
+  assert.equal(await login('role-injection@example.test', password), null)
 })
 
 test('legacy Drive migration requests reauthorization while preserving folders and current connections', async () => {
@@ -338,4 +372,154 @@ test('legacy Drive migration requests reauthorization while preserving folders a
   assert.equal(legacy.drive_folder_id, 'private-folder-0')
   assert.equal(legacy.drive_folder_url, 'private-folder-url-0')
   assert.equal(current.connection_status, 'connected')
+})
+
+test('email verification gates sessions and accepts a hashed, unexpired token only once', async () => {
+  const user = await registerPending('pending-confirmation@example.test', password)
+  assert.ok(user)
+  assert.equal(user.email_verified_at, null)
+  assert.equal(await login(user.email, password), null)
+  await assert.rejects(createSession(user.id))
+  const verification = await issueEmailVerification(user.email)
+  assert.ok(verification)
+  const stored = await database().prepare('SELECT token_hash FROM email_verifications WHERE user_id=?').get(user.id)
+  assert.notEqual(stored.token_hash, verification.token)
+  assert.equal(await issueEmailVerification(user.email), null)
+  assert.equal(await confirmEmail('invalid'), null)
+  const verified = await confirmEmail(verification.token)
+  assert.equal(verified.id, user.id)
+  assert.ok(verified.email_verified_at)
+  assert.equal(await confirmEmail(verification.token), null)
+  assert.equal((await login(user.email, password)).id, user.id)
+  assert.equal((await userForSession(await createSession(user.id))).id, user.id)
+  assert.equal(await issueEmailVerification(user.email), null)
+})
+
+test('expired tokens are rejected and resend quotas cannot be bypassed by requesting repeatedly', async () => {
+  const user = await registerPending('resend-confirmation@example.test', password)
+  const first = await issueEmailVerification(user.email)
+  await database().prepare('UPDATE email_verifications SET expires_at=? WHERE user_id=?').run(Date.now() - 1000, user.id)
+  assert.equal(await confirmEmail(first.token), null)
+  for (let index = 1; index < 5; index++) {
+    await database().prepare('UPDATE email_verifications SET created_at=? WHERE user_id=?').run(Date.now() - 61000, user.id)
+    assert.ok(await issueEmailVerification(user.email))
+  }
+  await database().prepare('UPDATE email_verifications SET created_at=? WHERE user_id=?').run(Date.now() - 61000, user.id)
+  assert.equal(await issueEmailVerification(user.email), null)
+  await discardEmailVerification(first.token)
+  assert.equal(await confirmEmail(first.token), null)
+})
+
+test('missing SMTP blocks signup without creating an account; delivery failure can be retried', async () => {
+  const { NextRequest } = await import('next/server.js')
+  const auth = await loadRoute('src/app/api/auth/[action]/route.ts', 'mail-failure-route')
+  const request = (action, email) => new NextRequest(`http://internal-container:3000/api/auth/${action}`, { method: 'POST', headers: { origin: process.env.SITE_URL, 'content-type': 'application/json' }, body: JSON.stringify({ email, password }) })
+  const context = action => ({ params: Promise.resolve({ action }) })
+  globalThis.testMailConfigured = false
+  try {
+    assert.equal((await auth.POST(request('signup', 'no-smtp@example.test'), context('signup'))).status, 503)
+    assert.equal(await database().prepare('SELECT id FROM users WHERE email=?').get('no-smtp@example.test'), undefined)
+  } finally { globalThis.testMailConfigured = true }
+  globalThis.testMailFailure = true
+  const messages = []
+  const original = console.error
+  console.error = message => messages.push(String(message))
+  try {
+    assert.equal((await auth.POST(request('signup', 'smtp-failed@example.test'), context('signup'))).status, 503)
+  } finally { globalThis.testMailFailure = false; console.error = original }
+  assert.ok(!messages.join('').includes('smtp-failed@example.test'))
+  const pending = await database().prepare('SELECT id FROM users WHERE email=?').get('smtp-failed@example.test')
+  assert.equal(Number((await database().prepare('SELECT count(*) AS count FROM email_verifications WHERE user_id=?').get(pending.id)).count), 0)
+  assert.equal((await auth.POST(request('resend-verification', 'smtp-failed@example.test'), context('resend-verification'))).status, 200)
+  assert.ok(globalThis.testMailbox.some(mail => mail.email === 'smtp-failed@example.test'))
+  const unknown = await auth.POST(request('resend-verification', 'unknown-account@example.test'), context('resend-verification'))
+  assert.equal(unknown.status, 200)
+  assert.ok(!(await unknown.text()).includes('unknown-account@example.test'))
+})
+
+test('restored dating isolates events, protects photos and releases contacts only after mutual matching', async () => {
+  const windowSource = readFileSync('src/lib/event-upload-window.ts','utf8')
+  writeFileSync(join(directory,'window.mjs'),ts.transpileModule(windowSource,{ compilerOptions: { target: ts.ScriptTarget.ES2022,module: ts.ModuleKind.ES2022 } }).outputText)
+  const serviceSource = readFileSync('src/lib/dating-server.ts','utf8').replace("import 'server-only'",'')
+    .replace("from '@/lib/db/core'","from './core.mjs'").replace("from '@/lib/event-upload-window'","from './window.mjs'")
+  writeFileSync(join(directory,'dating-server.mjs'),ts.transpileModule(serviceSource,{ compilerOptions: { target: ts.ScriptTarget.ES2022,module: ts.ModuleKind.ES2022 } }).outputText)
+  const service = await import(pathToFileURL(join(directory,'dating-server.mjs')).href)
+  const { getIstanbulDate } = await import(pathToFileURL(join(directory,'window.mjs')).href)
+  const route = await loadRoute('src/app/api/events/[slug]/dating/[action]/route.ts','dating-route')
+  const photos = await loadRoute('src/app/api/events/[slug]/dating/photos/[id]/route.ts','dating-photos-route')
+  const reports = await loadRoute('src/app/api/dashboard/dating/reports/route.ts','dating-reports-route')
+  const owner = await register('dating-owner@example.test',password)
+  const outsider = await register('dating-outsider@example.test',password)
+  const event = (await new Query('events',owner.id,false).insert({ owner_id: owner.id,title: 'Private wedding',event_date: getIstanbulDate(),slug: 'private-dating-event',dating_enabled: true }).select('*').single()).data
+  const otherEvent = (await new Query('events',outsider.id,false).insert({ owner_id: outsider.id,title: 'Other private event',event_date: getIstanbulDate(),slug: 'other-dating-event',dating_enabled: true }).select('*').single()).data
+  assert.equal(event.dating_enabled,true)
+  const tokens = ['a'.repeat(64),'b'.repeat(64),'c'.repeat(64)]
+  const png = Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0])
+  const profileRequest = (target,token,name,options = {}) => {
+    const form = new FormData()
+    for (const [key,value] of Object.entries({ firstName: name,age: '25',bio: 'Hello',consent: 'true',contactType: 'phone',contactValue: '+905551234567',...options })) form.set(key,value)
+    form.set('photo',new File([png],'portrait.png',{ type: 'image/png' }))
+    return new Request(`http://internal-container:3000/api/events/${target.slug}/dating/profile`,{ method: 'POST',headers: { authorization: `Bearer ${token}`,origin: process.env.SITE_URL },body: form })
+  }
+  await assert.rejects(service.createDatingProfile(profileRequest(event,tokens[0],'A',{ age: '17' }),event,tokens[0]))
+  await assert.rejects(service.createDatingProfile(profileRequest(event,tokens[0],'A',{ consent: 'false' }),event,tokens[0]))
+  const a = await service.createDatingProfile(profileRequest(event,tokens[0],'Participant A'),event,tokens[0])
+  const b = await service.createDatingProfile(profileRequest(event,tokens[1],'Participant B'),event,tokens[1])
+  const c = await service.createDatingProfile(profileRequest(otherEvent,tokens[2],'Other event participant'),otherEvent,tokens[2])
+  const request = (action,token) => new Request(`http://internal-container:3000/api/events/${event.slug}/dating/${action}`,{ headers: token ? { authorization: `Bearer ${token}` } : {} })
+  const context = action => ({ params: Promise.resolve({ slug: event.slug,action }) })
+  assert.equal((await route.GET(request('feed'),context('feed'))).status,401)
+  assert.equal((await route.GET(request('feed',tokens[2]),context('feed'))).status,401)
+  const session = await route.GET(request('session',tokens[0]),context('session'))
+  assert.equal(session.status,200)
+  assert.match(session.headers.get('set-cookie'),/HttpOnly/i)
+  const participantCookie = session.headers.get('set-cookie').split(';')[0]
+  const photoContext = { params: Promise.resolve({ slug: event.slug,id: b.id }) }
+  const photoRequest = cookie => new Request(`http://internal-container:3000/api/events/${event.slug}/dating/photos/${b.id}`,{ headers: { cookie: cookie || '' } })
+  assert.equal((await photos.GET(photoRequest(),photoContext)).status,404)
+  assert.equal((await photos.GET(photoRequest(`eventsnap_dating=${tokens[2]}`),photoContext)).status,404)
+  const privatePhoto = await photos.GET(photoRequest(participantCookie),photoContext)
+  assert.equal(privatePhoto.status,200)
+  assert.match(privatePhoto.headers.get('cache-control'),/private, no-store/)
+  assert.deepEqual(Buffer.from(await privatePhoto.arrayBuffer()),png)
+  const initialFeed = await service.datingFeed(event,a,event.slug)
+  assert.equal(initialFeed.candidates.length,1)
+  assert.equal(initialFeed.candidates[0].firstName,'Participant B')
+  assert.ok(!JSON.stringify(initialFeed).includes('+905551234567'))
+  assert.ok(!JSON.stringify(initialFeed).includes('guest_token_hash'))
+  assert.ok(!JSON.stringify(initialFeed).includes('photo_content'))
+  await assert.rejects(service.interact(event,a,c.id,'like',event.slug))
+  assert.equal((await service.interact(event,a,b.id,'like',event.slug)).matched,false)
+  assert.equal((await service.datingFeed(event,a,event.slug)).liked[0].contact,undefined)
+  assert.equal((await service.interact(event,b,a.id,'like',event.slug)).matched,true)
+  assert.equal((await service.datingFeed(event,a,event.slug)).matches[0].contact.value,'+905551234567')
+  await service.protectParticipant(event,a,b.id,'report','Inappropriate profile')
+  const ownerCookie = `eventsnap_session=${await createSession(owner.id)}`
+  const outsiderCookie = `eventsnap_session=${await createSession(outsider.id)}`
+  const reportRequest = cookie => new Request(`http://internal-container:3000/api/dashboard/dating/reports?eventId=${event.id}`,{ headers: { cookie } })
+  assert.equal((await reports.GET(reportRequest(outsiderCookie))).status,404)
+  const ownerReports = await reports.GET(reportRequest(ownerCookie))
+  assert.equal(ownerReports.status,200)
+  const report = (await ownerReports.json()).reports[0]
+  assert.equal(report.profile.name,'Participant B')
+  await service.protectParticipant(event,a,b.id,'block','')
+  const blocked = await service.datingFeed(event,a,event.slug)
+  assert.equal(blocked.matches.length,0)
+  assert.equal(blocked.liked.length,0)
+  assert.equal((await service.datingFeed(event,b,event.slug)).candidates.length,0)
+  assert.equal((await photos.GET(photoRequest(participantCookie),photoContext)).status,404)
+  await assert.rejects(service.interact(event,b,a.id,'like',event.slug))
+  const removeReport = new Request('http://internal-container:3000/api/dashboard/dating/reports',{ method: 'POST',headers: { origin: process.env.SITE_URL,cookie: ownerCookie,'content-type': 'application/json' },body: JSON.stringify({ eventId: event.id,reportId: report.id,action: 'remove' }) })
+  assert.equal((await reports.POST(removeReport)).status,200)
+  assert.equal(await service.getGuestProfile(event.id,tokens[1]),undefined)
+  assert.equal((await photos.GET(photoRequest(ownerCookie),photoContext)).status,404)
+  await new Query('events',owner.id,false).update({ dating_enabled: false }).eq('id',event.id)
+  assert.equal((await route.GET(request('feed',tokens[0]),context('feed'))).status,403)
+  const ownDelete = new Request(`http://internal-container:3000/api/events/${event.slug}/dating/safety`,{ method: 'DELETE',headers: { origin: process.env.SITE_URL,authorization: `Bearer ${tokens[0]}` } })
+  assert.equal((await route.DELETE(ownDelete,context('safety'))).status,200)
+  assert.equal(await service.getGuestProfile(event.id,tokens[0]),undefined)
+  await database().prepare('UPDATE events SET event_date=? WHERE id=?').run('2000-01-01',otherEvent.id)
+  await service.cleanupExpiredDating()
+  assert.equal(await service.getGuestProfile(otherEvent.id,tokens[2]),undefined)
+  assert.equal(Number((await database().prepare('SELECT count(*) AS count FROM dating_likes WHERE event_id=?').get(event.id)).count),0)
 })

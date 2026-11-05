@@ -1,6 +1,6 @@
 # GetEventSnap
 
-QR kod üzerinden fotoğraf ve videoları etkinlik sahibinin Google Drive hesabına gönderir. Kullanıcılar, parola özetleri, oturumlar, etkinlikler, özel kapaklar ve şifrelenmiş Drive bağlantıları PostgreSQL’de saklanır. Google Drive dışında harici uygulama servisi kullanılmaz.
+QR kod üzerinden fotoğraf ve videoları etkinlik sahibinin Google Drive hesabına gönderir. Kullanıcılar, parola özetleri, oturumlar, etkinlikler, özel kapaklar ve şifrelenmiş Drive bağlantıları PostgreSQL’de saklanır. Google Drive ve kayıt onay e-postaları için SMTP kullanılır.
 
 ## Dokploy kurulumu
 
@@ -37,6 +37,22 @@ Kurulum, Dokploy’un [veritabanı bağlantısı](https://docs.dokploy.com/docs/
 
 İlk deployda geçici kullanıcı oluşturmak için `SEED_USER_ENABLED=true`, `SEED_USER_EMAIL` ve `SEED_USER_PASSWORD` değerlerini Dokploy Environment’a ekleyin. Hesap mevcutsa değiştirilmez. Girişten sonra panelde **Parola değiştir** bağlantısını kullanın, seed’i kapatıp seed e-posta/parola değişkenlerini kaldırın. Ayrıntılar [yükleme rehberinde](DOKPLOY.md).
 
+## Tanışma
+
+Etkinlik sahibi panelindeki **Tanışma → Aç** düğmesiyle etkinleştirilir; yeni etkinliklerde varsayılan olarak kapalıdır. Misafirler QR sayfasından takma ad, yaş ve fotoğrafla katılabilir; 18 yaş ve açık rıza onayı zorunludur. Kullanım yalnızca etkinlik günü Türkiye saatine göre açıktır.
+
+Profiller herkese açık HTML veya metadata içine yazılmaz. Misafir oturum belirteçlerinin yalnızca özeti veritabanındadır. Fotoğraf adresleri tek başına erişim sağlamaz; her istekte aynı etkinlikteki geçerli misafir oturumu veya etkinlik sahipliği denetlenir. Telefon/Instagram bilgileri yalnızca karşılıklı eşleşmede görünür. Misafir kendi profilini silebilir; engelleme her iki yönde görünürlüğü ve eşleşmeyi kaldırır. Bildirilen profiller etkinlik sahibinin panelinden incelenip kaldırılabilir.
+
+Docker başlangıcında çalışan temizlik işlemi her dakika geçmiş etkinliklerin profil/fotoğraf ve bildirim kayıtlarını siler; Tanışma istekleri de süresi geçen verileri temizler. Profil silinince beğeni, engel ve eşleşmeler veritabanında ilişkisel olarak silinir. Yeni migration otomatik uygulanır; ek bir dış servis veya ortam anahtarı gerekmez.
+
+## Kayıt onay e-postaları
+
+Dokploy Environment’ta `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` ve `SMTP_FROM` tanımlayın. `SMTP_FROM` yalnızca gönderici e-posta adresidir. Port 465 için `SMTP_SECURE=true`; 587 için `false` kullanılır ve STARTTLS zorunludur. SMTP bilgilerini e-posta sağlayıcınızdan alın. SMTP eksikse web sunucusu çalışır, yeni kayıt ve onay gönderimi 503 döndürür. Üretim gönderimini sağlayıcınızın SPF/DKIM ayarlarıyla doğrulayın.
+
+Yeni kayıtlar onay bekler. Kullanıcı e-postadaki `/eposta-onay#token=...` bağlantısını açıp **E-posta adresimi onayla ve devam et** düğmesine basar. Bağlantı token’ının yalnızca özeti veritabanına kaydedilir; URL fragment’i sunucu erişim loglarına gönderilmez. Yanıtlar özel ve önbelleksizdir. Yeniden gönderimler en sık dakikada bir ve saatte en fazla beş kez yapılabilir.
+
+Bu güncellemeden önceki normal hesaplar da onay istemelidir; eski oturumları kaldırılır. Mevcut yöneticiler ve sunucu operatörünün seed ile oluşturduğu hesaplar korunur. Normal kayıt API’si doğrulama veya yönetici yetkisi atayamaz.
+
 ## Google Drive
 
 Google OAuth web istemcisinde Drive API’yi etkinleştirin. İzin kapsamı `https://www.googleapis.com/auth/drive.file` olmalıdır. Yetkili JavaScript kaynağına `SITE_URL` değerini, dönüş adresine aynı kaynaktaki `/api/google/drive/callback` yolunu ekleyin.
@@ -45,9 +61,9 @@ Uygulama Drive klasörüne herkese açık paylaşım izni eklemez. Misafir dosya
 
 ## Gizlilik şartları
 
-Kişisel veriler herkese açık yayınlanmamalıdır. Hesap ve etkinlik bilgileri yetkili panelde tutulur. Misafir sayfası kişisel bilgiler, adresler veya özel kapaklar içermez; HTML, RSC verisi ve sosyal paylaşım metadata’sı da buna dahildir. Özel kapaklar veritabanından yalnızca sahibinin oturumuyla sunulur. Her misafir yalnızca kendi tarayıcı kimliğiyle yüklediği dosyaları görebilir. Profil/iletişim paylaşan Tanışma modülü kaldırılmıştır.
+Kişisel veriler herkese açık yayınlanmamalıdır. Hesap ve etkinlik bilgileri yetkili panelde tutulur. Misafir sayfası kişisel bilgiler, adresler veya özel kapaklar içermez; HTML, RSC verisi ve sosyal paylaşım metadata’sı da buna dahildir. Özel kapaklar veritabanından yalnızca sahibinin oturumuyla sunulur. Her misafir yalnızca kendi tarayıcı kimliğiyle yüklediği dosyaları görebilir. Tanışma isteğe bağlıdır; profiller yalnızca aynı etkinliğe açık rızayla katılan 18 yaş ve üzeri misafir oturumları tarafından görülebilir. İletişim bilgileri yalnızca karşılıklı eşleşmede paylaşılır.
 
-Parolalar rastgele tuzla scrypt kullanılarak özetlenir. Oturum belirteçlerinin yalnızca özeti veritabanında saklanır; çerezler `HttpOnly`, üretimde `Secure` ve `SameSite=Lax` kullanır. Parola değişiminde ve hesap engellendiğinde oturumlar iptal edilir. Dış e-posta servisi olmadığı için otomatik e-posta doğrulama veya e-postayla parola kurtarma yoktur. Oturum içinden mevcut parola doğrulanarak parola değiştirilebilir.
+Parolalar rastgele tuzla scrypt kullanılarak özetlenir. Oturum belirteçlerinin yalnızca özeti veritabanında saklanır; çerezler `HttpOnly`, üretimde `Secure` ve `SameSite=Lax` kullanır. Parola değişiminde ve hesap engellendiğinde oturumlar iptal edilir. Yeni üyelerin e-posta adreslerini onaylaması zorunludur. Onay bağlantıları 30 dakika geçerlidir ve tek kullanımlıktır; onaylanmamış hesaplar oturum açamaz. E-postayla parola kurtarma henüz yoktur. Oturum içinden mevcut parola doğrulanarak parola değiştirilebilir.
 
 ## Yerel geliştirme ve doğrulama
 
