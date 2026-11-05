@@ -9,9 +9,10 @@ import styles from './AuthForm.module.css'
 type AuthFormProps = {
   mode: 'login' | 'signup'
   preview?: boolean
+  verificationRequired?: boolean
 }
 
-export default function AuthForm({ mode, preview = false }: AuthFormProps) {
+export default function AuthForm({ mode, preview = false, verificationRequired = false }: AuthFormProps) {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -100,7 +101,7 @@ export default function AuthForm({ mode, preview = false }: AuthFormProps) {
       <button className={styles.button} type="submit" disabled={isSubmitting || preview}>
         {isSubmitting ? 'Lütfen bekleyin…' : isSignup ? 'Hesap oluştur' : 'Giriş yap'}
       </button>
-      {!preview && <Link className={styles.resetLink} href="/eposta-onay">Onay e-postasını tekrar gönder</Link>}
+      {!preview && verificationRequired && <Link className={styles.resetLink} href="/eposta-onay">Onay e-postasını tekrar gönder</Link>}
       {!isSignup && <p className={styles.status}>Parolanızı unuttuysanız sunucu yöneticisinden hesap kurtarma talep edin.</p>}
     </form>
   )

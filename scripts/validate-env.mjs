@@ -11,6 +11,7 @@ try {
   if (site.protocol !== 'https:' || site.username || site.password || site.search || site.hash || site.pathname !== '/') throw new Error('SITE_URL yalnızca HTTPS site kaynağını içermeli.')
   if (process.env.GOOGLE_REDIRECT_URI && process.env.GOOGLE_REDIRECT_URI !== new URL('/api/google/drive/callback', site).toString()) throw new Error('GOOGLE_REDIRECT_URI site callback adresiyle eşleşmeli.')
   if (process.env.ADMIN_USER_ID && !/^[a-f0-9-]{36}$/i.test(process.env.ADMIN_USER_ID)) throw new Error('ADMIN_USER_ID geçerli bir kullanıcı UUID değeri olmalı.')
+  if (process.env.EMAIL_VERIFICATION_REQUIRED && !['true','false'].includes(process.env.EMAIL_VERIFICATION_REQUIRED)) throw new Error('EMAIL_VERIFICATION_REQUIRED true veya false olmalı.')
   if (process.env.SEED_USER_ENABLED && !['true', 'false'].includes(process.env.SEED_USER_ENABLED)) throw new Error('SEED_USER_ENABLED true veya false olmalı.')
   if (process.env.SEED_USER_IS_ADMIN && !['true', 'false'].includes(process.env.SEED_USER_IS_ADMIN)) throw new Error('SEED_USER_IS_ADMIN true veya false olmalı.')
   if (process.env.SEED_USER_ENABLED === 'true') {
@@ -24,6 +25,6 @@ try {
   process.exit(1)
 }
 
-if (['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'].some(name => !process.env[name]?.trim())) {
+if (process.env.EMAIL_VERIFICATION_REQUIRED === 'true' && ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'].some(name => !process.env[name]?.trim())) {
   console.warn('[E-posta] SMTP ayarları eksik; yeni kayıt ve onay e-postası gönderimi kapalı. Web sunucusu başlatılacak.')
 }

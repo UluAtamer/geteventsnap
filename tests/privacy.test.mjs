@@ -21,12 +21,15 @@ writeFileSync(join(directory, 'pg-test-adapter.mjs'), `
   export default { Pool, Client: Pool };
 `)
 process.env.DATABASE_URL = 'postgresql://unused/isolated-test'
+process.env.EMAIL_VERIFICATION_REQUIRED = 'true'
+writeFileSync(join(directory, 'verification-policy.mjs'), ts.transpileModule(readFileSync('src/lib/email-verification-policy.ts','utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
 writeFileSync(join(directory, 'ui-preview.mjs'), ts.transpileModule(readFileSync('src/lib/ui-preview.ts', 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
 for (const name of ['core', 'auth', 'email-verification']) {
   const source = readFileSync(resolve(`src/lib/db/${name}.ts`), 'utf8')
     .replace("from './core'", "from './core.mjs'")
     .replace("from './auth'", "from './auth.mjs'")
     .replace("from '../ui-preview'", "from './ui-preview.mjs'")
+    .replace("from '../email-verification-policy'", "from './verification-policy.mjs'")
     .replace("from 'pg'", "from './pg-test-adapter.mjs'")
   writeFileSync(join(directory, `${name}.mjs`), ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
 }
@@ -142,6 +145,7 @@ async function loadRoute(file, name) {
     .replace("from 'next/server'", `from '${serverUrl}'`)
     .replace("from '@/lib/db/core'", "from './core.mjs'")
     .replace("from '@/lib/ui-preview'", "from './ui-preview.mjs'")
+    .replace("from '@/lib/email-verification-policy'", "from './verification-policy.mjs'")
     .replace("from '@/lib/db/auth'", "from './auth.mjs'")
     .replace("from '@/lib/db/email-verification'", "from './email-verification.mjs'")
     .replace("from '@/lib/mail'", "from './mail.mjs'")
@@ -227,6 +231,7 @@ test('guest HTML and client props omit event names, addresses, email and private
     .replace("from '@/lib/event-upload-window'", "from './window.mjs'")
     .replace("from '@/lib/db/core'", "from './core.mjs'")
     .replace("from '@/lib/ui-preview'", "from './ui-preview.mjs'")
+    .replace("from '@/lib/email-verification-policy'", "from './verification-policy.mjs'")
     .replace("import styles from './event.module.css'", "const styles = {}")
   page = `import React from '${pathToFileURL(resolve('node_modules/react/index.js')).href}'\n` + page
   writeFileSync(join(directory, 'guest-page.mjs'), ts.transpileModule(page, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022, jsx: ts.JsxEmit.React } }).outputText)
@@ -522,4 +527,34 @@ test('restored dating isolates events, protects photos and releases contacts onl
   await service.cleanupExpiredDating()
   assert.equal(await service.getGuestProfile(otherEvent.id,tokens[2]),undefined)
   assert.equal(Number((await database().prepare('SELECT count(*) AS count FROM dating_likes WHERE event_id=?').get(event.id)).count),0)
+})
+
+test('disabled verification permits signup and pending-account login without SMTP, then enforces confirmation when reenabled', async () => {
+  const { NextRequest } = await import('next/server.js')
+  const auth = await loadRoute('src/app/api/auth/[action]/route.ts','verification-disabled-route')
+  const email = 'verification-disabled@example.test'
+  const request = action => new NextRequest(`http://internal-container:3000/api/auth/${action}`,{ method: 'POST',headers: { origin: process.env.SITE_URL,'content-type': 'application/json' },body: JSON.stringify({ email,password }) })
+  const context = action => ({ params: Promise.resolve({ action }) })
+  const mailCount = globalThis.testMailbox.length
+  delete process.env.EMAIL_VERIFICATION_REQUIRED
+  globalThis.testMailConfigured = false
+  try {
+    const response = await auth.POST(request('signup'),context('signup'))
+    assert.equal(response.status,200)
+    assert.ok(response.headers.get('set-cookie'))
+    const user = (await response.json()).data.user
+    assert.equal(user.email_verified_at,null)
+    const token = await createSession(user.id)
+    assert.equal((await userForSession(token)).id,user.id)
+    assert.equal((await login(email,password)).id,user.id)
+    assert.equal(globalThis.testMailbox.length,mailCount)
+    assert.equal((await auth.POST(request('resend-verification'),context('resend-verification'))).status,200)
+    process.env.EMAIL_VERIFICATION_REQUIRED = 'true'
+    assert.equal(await login(email,password),null)
+    assert.equal(await userForSession(token),null)
+    await assert.rejects(createSession(user.id))
+  } finally {
+    process.env.EMAIL_VERIFICATION_REQUIRED = 'true'
+    globalThis.testMailConfigured = true
+  }
 })

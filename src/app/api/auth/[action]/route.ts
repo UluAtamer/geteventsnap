@@ -1,3 +1,4 @@
+import { isEmailVerificationRequired } from '@/lib/email-verification-policy'
 import { isUiPreview } from '@/lib/ui-preview'
 import { isSameOriginRequest } from '@/lib/request-origin'
 import { NextRequest, NextResponse } from 'next/server'
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return sessionResponse(user, await createSession(user.id))
     }
     if (action === 'resend-verification') {
+      if (!isEmailVerificationRequired()) return reply({ data: { message: 'E-posta onayı şu anda gerekli değil. Hesabınızla giriş yapabilirsiniz.' }, error: null })
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return reply({ error: { message: 'Geçerli bir e-posta yazın.' } }, 400)
       if (!isMailConfigured()) return reply({ error: { message: 'E-posta gönderimi henüz hazır değil. Lütfen daha sonra deneyin.' } }, 503)
       if (!await mailVerification(email)) return reply({ error: { message: 'Onay e-postası gönderilemedi. Biraz sonra tekrar deneyin.' } }, 503)
@@ -75,13 +77,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return reply({ error: { message: 'Geçerli bir e-posta yazın.' } }, 400)
     if (action === 'signup') {
+      if (!isEmailVerificationRequired()) {
+        const user = await register(email, password)
+        if (!user) return reply({ error: { message: 'Kayıt tamamlanamadı. Mevcut hesabınız varsa giriş yapın.' } }, 409)
+        await revokeSession(token)
+        return sessionResponse(user, await createSession(user.id))
+      }
       if (!isMailConfigured()) return reply({ error: { message: 'E-posta gönderimi henüz hazır değil. Lütfen daha sonra deneyin.' } }, 503)
       await register(email, password)
       if (!await mailVerification(email)) return reply({ error: { message: 'Onay e-postası gönderilemedi. Onay bağlantısını tekrar göndermeyi deneyin.' } }, 503)
       return reply({ data: { user: null, session: null, verificationRequired: true }, error: null })
     }
     const user = await login(email, password)
-    if (!user) return reply({ error: { message: 'E-posta veya parola hatalı ya da e-posta adresiniz henüz onaylanmadı.' } }, 401)
+    if (!user) return reply({ error: { message: isEmailVerificationRequired() ? 'E-posta veya parola hatalı ya da e-posta adresiniz henüz onaylanmadı.' : 'E-posta veya parola hatalı.' } }, 401)
     await revokeSession(token)
     return sessionResponse(user, await createSession(user.id))
   } catch {

@@ -1,24 +1,40 @@
 import 'server-only'
 import nodemailer from 'nodemailer'
 
-function configuration() {
-  const host = process.env.SMTP_HOST?.trim()
-  const user = process.env.SMTP_USER?.trim()
-  const pass = process.env.SMTP_PASSWORD
-  const from = process.env.SMTP_FROM?.trim()
+export function mailConfigurationIssues() {
+  const issues = new Set<string>()
+  for (const name of ['SMTP_HOST','SMTP_USER','SMTP_PASSWORD','SMTP_FROM']) {
+    if (!process.env[name]?.trim()) issues.add(name)
+  }
+  if (process.env.SMTP_HOST && /[\s/]/.test(process.env.SMTP_HOST.trim())) issues.add('SMTP_HOST')
+  if (process.env.SMTP_FROM && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(process.env.SMTP_FROM.trim())) issues.add('SMTP_FROM')
   const port = Number(process.env.SMTP_PORT || 465)
-  const secureSetting = process.env.SMTP_SECURE
-  if (!host || /[\s/]/.test(host) || !user || !pass || !from ||
-      !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(from) ||
-      !Number.isInteger(port) || port < 1 || port > 65535 ||
-      (secureSetting && !['true','false'].includes(secureSetting))) throw new Error('SMTP ayarları tamamlanmamış.')
-  const site = new URL(process.env.SITE_URL || '')
-  if ((process.env.NODE_ENV === 'production' && site.protocol !== 'https:') || !['https:','http:'].includes(site.protocol) || site.username || site.password) throw new Error('SITE_URL geçersiz.')
-  return { host, user, pass, from, port, secure: secureSetting ? secureSetting === 'true' : port === 465, site }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) issues.add('SMTP_PORT')
+  const secure = process.env.SMTP_SECURE?.trim()
+  if (secure && !['true','false'].includes(secure)) issues.add('SMTP_SECURE')
+  try {
+    const site = new URL(process.env.SITE_URL || '')
+    if (!['http:','https:'].includes(site.protocol) || (process.env.NODE_ENV === 'production' && site.protocol !== 'https:') || site.username || site.password) issues.add('SITE_URL')
+  } catch { issues.add('SITE_URL') }
+  return [...issues]
+}
+
+function configuration() {
+  if (mailConfigurationIssues().length) throw new Error('SMTP ayarları tamamlanmamış.')
+  const port = Number(process.env.SMTP_PORT || 465)
+  const secure = process.env.SMTP_SECURE?.trim()
+  return {
+    host: process.env.SMTP_HOST!.trim(), user: process.env.SMTP_USER!.trim(),
+    pass: process.env.SMTP_PASSWORD!, from: process.env.SMTP_FROM!.trim(),port,
+    secure: secure ? secure === 'true' : port === 465,
+    site: new URL(process.env.SITE_URL!),
+  }
 }
 
 export function isMailConfigured() {
-  try { configuration(); return true } catch { return false }
+  const issues = mailConfigurationIssues()
+  if (issues.length) console.warn(`[E-posta] Eksik/geçersiz environment alanları: ${issues.join(', ')}. Değerler gizlendi.`)
+  return issues.length === 0
 }
 
 export async function sendVerificationEmail(email: string, token: string) {

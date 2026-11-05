@@ -1,6 +1,6 @@
 # GetEventSnap — Dokploy yükleme rehberi
 
-Bu rehber, uygulamayı **Dockerfile** ile, Dokploy’daki ayrı bir **PostgreSQL** servisine bağlayarak yayınlar. Gizli değerler Dokploy Environment’ta tutulur. Kayıt onay e-postaları için ayrıca SMTP hesabı gerekir. Yerel önizleme modu üretimde kullanılmaz.
+Bu rehber, uygulamayı **Dockerfile** ile, Dokploy’daki ayrı bir **PostgreSQL** servisine bağlayarak yayınlar. Gizli değerler Dokploy Environment’ta tutulur. E-posta onayı varsayılan olarak kapalıdır; daha sonra etkinleştirmek için SMTP hesabı gerekir. Yerel önizleme modu üretimde kullanılmaz.
 
 ## 1. Güncel kodu depoya gönder
 
@@ -90,6 +90,7 @@ GOOGLE_REDIRECT_URI=https://etkinlik.example.com/api/google/drive/callback
 ADMIN_USER_ID=
 GUEST_MAX_PHOTO_BYTES=26214400
 GUEST_MAX_VIDEO_BYTES=524288000
+EMAIL_VERIFICATION_REQUIRED=false
 SMTP_HOST=<e-posta sağlayıcının SMTP sunucusu>
 SMTP_PORT=465
 SMTP_SECURE=true
@@ -111,13 +112,15 @@ Environment değişikliklerini kaydet. Sonraki değişikliklerde yeni değerleri
 
 ## Kayıt onay e-postalarını etkinleştir
 
+Şimdilik `EMAIL_VERIFICATION_REQUIRED=false` kullan. Kullanıcılar kayıt sonrası doğrudan panele girebilir; SMTP aranmaz. DNS ve SMTP hazır olduğunda `EMAIL_VERIFICATION_REQUIRED=true` yapıp yeniden deploy et. Doğrulanmamış hesaplar o andan itibaren onay olmadan giriş yapamaz; kapalı dönemde açılan hesaplar otomatik olarak onaylanmış sayılmaz.
+
 SMTP bilgilerini e-posta sağlayıcının panelinden al. `SMTP_FROM` alanına sadece e-posta adresini yaz; uygulama gönderici adını GetEventSnap olarak ekler. Port 465 için `SMTP_SECURE=true`, port 587 için `SMTP_SECURE=false` kullan; ikinci durumda STARTTLS zorunludur. Sunucunun seçilen SMTP portuna dışarı bağlantı kurabilmesi gerekir. SPF ve DKIM kayıtlarını e-posta sağlayıcının verdiği değerlerle ayarla. [Nodemailer SMTP belgesi](https://nodemailer.com/smtp)
 
-SMTP bilgileri eksik olduğunda web sunucusu durmaz; yeni kayıt ve onay gönderimi kapalı kalır. Dolu fakat hatalı bilgilerde kayıt ekranında gönderim hatası görünür; loglarda SMTP parolası veya onay bağlantısı yazdırılmaz.
+Onay zorunluluğu açıkken SMTP bilgileri eksik olduğunda web sunucusu durmaz; yeni kayıt ve onay gönderimi kapalı kalır. Eksik veya biçimi geçersiz ayarlarda container logunda `[E-posta] Eksik/geçersiz environment alanları: ...` satırı yalnızca sorunlu değişken adlarını gösterir. Değerler loglanmaz. `SMTP_PASSWORD` adı kullanılmalıdır; `SMTP_PASS` okunmaz. `SMTP_FROM` yalnızca e-posta adresi, `SMTP_HOST` yalnızca sunucu adı olmalıdır. Dolu fakat hatalı bilgilerde kayıt ekranında gönderim hatası görünür; loglarda SMTP parolası veya onay bağlantısı yazdırılmaz.
 
 Kayıt testi: `/kayit` üzerinden yeni bir adresle kayıt ol. Onay öncesinde oturum açılmamalı. Gelen e-postadaki bağlantıyı açıp **E-posta adresimi onayla ve devam et** düğmesine bas; ardından panel açılmalı. Kullanılmış bağlantı yeniden kabul edilmemeli. E-posta gelmezse giriş/kayıt ekranındaki **Onay e-postasını tekrar gönder** bağlantısını kullan. Onay bağlantıları 30 dakika geçerlidir; tekrar gönderme dakikada bir ve saatte en fazla beş kez yapılır.
 
-Önceki normal kullanıcıların da e-postalarını onaylaması gerekir; eski oturumları geçersizleşir. Mevcut yöneticiler ve operatörün seed hesapları korunur.
+Onay zorunluluğu açıldığında doğrulanmamış normal kullanıcıların da e-postalarını onaylaması gerekir; eski oturumları geçersizleşir. Mevcut yöneticiler ve operatörün seed hesapları korunur.
 
 ## İlk deploy için geçici kullanıcı
 

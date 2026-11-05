@@ -1,3 +1,4 @@
+import { isEmailVerificationRequired } from '../email-verification-policy'
 import { isUiPreview } from '../ui-preview'
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual, createHash } from 'node:crypto'
 import { promisify } from 'node:util'
@@ -23,7 +24,7 @@ export async function verifyPassword(password: string, encoded: string) {
 export async function userForSession(token?: string): Promise<User | null> {
   if (isUiPreview() || !token || !/^[a-f0-9]{64}$/.test(token)) return null
   const row = await database().prepare(`SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id
-    WHERE u.email_verified_at IS NOT NULL AND s.token_hash=? AND s.expires_at>? AND (u.banned_until IS NULL OR u.banned_until < ?)`).get(tokenHash(token), Date.now(), new Date().toISOString())
+    WHERE (u.email_verified_at IS NOT NULL OR ?) AND s.token_hash=? AND s.expires_at>? AND (u.banned_until IS NULL OR u.banned_until < ?)`).get(!isEmailVerificationRequired(), tokenHash(token), Date.now(), new Date().toISOString())
   return row ? publicUser(row) : null
 }
 export async function createSession(userId: string) {
@@ -31,8 +32,8 @@ export async function createSession(userId: string) {
   const token = randomBytes(32).toString('hex')
   await db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now())
   const session = await db.prepare(`INSERT INTO sessions(token_hash,user_id,expires_at)
-    SELECT ?,id,? FROM users WHERE id=? AND email_verified_at IS NOT NULL
-    AND (banned_until IS NULL OR banned_until < ?) RETURNING user_id`).get(tokenHash(token), Date.now() + SESSION_SECONDS * 1000, userId, new Date().toISOString())
+    SELECT ?,id,? FROM users WHERE id=? AND (email_verified_at IS NOT NULL OR ?)
+    AND (banned_until IS NULL OR banned_until < ?) RETURNING user_id`).get(tokenHash(token), Date.now() + SESSION_SECONDS * 1000, userId, !isEmailVerificationRequired(), new Date().toISOString())
   if (!session) throw new Error('Doğrulanmış bir hesap gerekiyor.')
   return token
 }
@@ -57,7 +58,7 @@ export async function login(email: string, password: string) {
   // Perform the same expensive hash when the address is unknown.
   const dummy = 'scrypt:00000000000000000000000000000000:' + '00'.repeat(64)
   const valid = await verifyPassword(password, String(row?.password_hash || dummy))
-  if (!valid || !row || !row.email_verified_at || (row.banned_until && String(row.banned_until) > new Date().toISOString())) return null
+  if (!valid || !row || (isEmailVerificationRequired() && !row.email_verified_at) || (row.banned_until && String(row.banned_until) > new Date().toISOString())) return null
   await db.prepare('UPDATE users SET last_sign_in_at=? WHERE id=?').run(new Date().toISOString(), row.id)
   return publicUser(row)
 }

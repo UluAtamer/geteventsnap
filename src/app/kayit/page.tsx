@@ -1,3 +1,4 @@
+import { isEmailVerificationRequired } from '@/lib/email-verification-policy'
 import { isUiPreview } from '@/lib/ui-preview'
 import BrandLogo from '@/components/brand/BrandLogo'
 import type { Metadata } from 'next'
@@ -21,7 +22,7 @@ export default function RegisterPage() {
         <p className={styles.eyebrow}>ETKİNLİK SAHİBİ</p>
         <h1>Anılar biriktirmeye başlayın</h1>
         <p className={styles.intro}>Hesabınızı oluşturun; etkinliğinizi sonraki adımda birlikte hazırlayalım.</p>
-        <AuthForm mode="signup" preview={isUiPreview()} />
+        <AuthForm mode="signup" preview={isUiPreview()} verificationRequired={isEmailVerificationRequired()} />
         <p className={styles.switch}>
           Zaten hesabınız var mı? <Link href="/giris">Giriş yapın</Link>
         </p>

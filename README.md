@@ -47,11 +47,11 @@ Docker başlangıcında çalışan temizlik işlemi her dakika geçmiş etkinlik
 
 ## Kayıt onay e-postaları
 
-Dokploy Environment’ta `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` ve `SMTP_FROM` tanımlayın. `SMTP_FROM` yalnızca gönderici e-posta adresidir. Port 465 için `SMTP_SECURE=true`; 587 için `false` kullanılır ve STARTTLS zorunludur. SMTP bilgilerini e-posta sağlayıcınızdan alın. SMTP eksikse web sunucusu çalışır, yeni kayıt ve onay gönderimi 503 döndürür. Üretim gönderimini sağlayıcınızın SPF/DKIM ayarlarıyla doğrulayın.
+Dokploy Environment’ta `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` ve `SMTP_FROM` tanımlayın. `SMTP_FROM` yalnızca gönderici e-posta adresidir. Port 465 için `SMTP_SECURE=true`; 587 için `false` kullanılır ve STARTTLS zorunludur. SMTP bilgilerini e-posta sağlayıcınızdan alın. Onay zorunlu tutulduğunda SMTP eksikse web sunucusu çalışır, yeni kayıt ve onay gönderimi 503 döndürür. Üretim gönderimini sağlayıcınızın SPF/DKIM ayarlarıyla doğrulayın.
 
-Yeni kayıtlar onay bekler. Kullanıcı e-postadaki `/eposta-onay#token=...` bağlantısını açıp **E-posta adresimi onayla ve devam et** düğmesine basar. Bağlantı token’ının yalnızca özeti veritabanına kaydedilir; URL fragment’i sunucu erişim loglarına gönderilmez. Yanıtlar özel ve önbelleksizdir. Yeniden gönderimler en sık dakikada bir ve saatte en fazla beş kez yapılabilir.
+`EMAIL_VERIFICATION_REQUIRED=false` veya tanımsızken kayıt ve giriş SMTP olmadan çalışır. `true` olduğunda yeni kayıtlar onay bekler. Kullanıcı e-postadaki `/eposta-onay#token=...` bağlantısını açıp **E-posta adresimi onayla ve devam et** düğmesine basar. Bağlantı token’ının yalnızca özeti veritabanına kaydedilir; URL fragment’i sunucu erişim loglarına gönderilmez. Yanıtlar özel ve önbelleksizdir. Yeniden gönderimler en sık dakikada bir ve saatte en fazla beş kez yapılabilir.
 
-Bu güncellemeden önceki normal hesaplar da onay istemelidir; eski oturumları kaldırılır. Mevcut yöneticiler ve sunucu operatörünün seed ile oluşturduğu hesaplar korunur. Normal kayıt API’si doğrulama veya yönetici yetkisi atayamaz.
+Onay zorunluluğu açıldığında doğrulanmamış normal hesaplar da onay istemelidir; eski oturumları kaldırılır. Mevcut yöneticiler ve sunucu operatörünün seed ile oluşturduğu hesaplar korunur. Normal kayıt API’si doğrulama veya yönetici yetkisi atayamaz.
 
 ## Google Drive
 
@@ -63,7 +63,7 @@ Uygulama Drive klasörüne herkese açık paylaşım izni eklemez. Misafir dosya
 
 Kişisel veriler herkese açık yayınlanmamalıdır. Hesap ve etkinlik bilgileri yetkili panelde tutulur. Misafir sayfası kişisel bilgiler, adresler veya özel kapaklar içermez; HTML, RSC verisi ve sosyal paylaşım metadata’sı da buna dahildir. Özel kapaklar veritabanından yalnızca sahibinin oturumuyla sunulur. Her misafir yalnızca kendi tarayıcı kimliğiyle yüklediği dosyaları görebilir. Tanışma isteğe bağlıdır; profiller yalnızca aynı etkinliğe açık rızayla katılan 18 yaş ve üzeri misafir oturumları tarafından görülebilir. İletişim bilgileri yalnızca karşılıklı eşleşmede paylaşılır.
 
-Parolalar rastgele tuzla scrypt kullanılarak özetlenir. Oturum belirteçlerinin yalnızca özeti veritabanında saklanır; çerezler `HttpOnly`, üretimde `Secure` ve `SameSite=Lax` kullanır. Parola değişiminde ve hesap engellendiğinde oturumlar iptal edilir. Yeni üyelerin e-posta adreslerini onaylaması zorunludur. Onay bağlantıları 30 dakika geçerlidir ve tek kullanımlıktır; onaylanmamış hesaplar oturum açamaz. E-postayla parola kurtarma henüz yoktur. Oturum içinden mevcut parola doğrulanarak parola değiştirilebilir.
+Parolalar rastgele tuzla scrypt kullanılarak özetlenir. Oturum belirteçlerinin yalnızca özeti veritabanında saklanır; çerezler `HttpOnly`, üretimde `Secure` ve `SameSite=Lax` kullanır. Parola değişiminde ve hesap engellendiğinde oturumlar iptal edilir. E-posta onayı varsayılan olarak kapalıdır. `EMAIL_VERIFICATION_REQUIRED=true` olduğunda yeni üyelerin e-posta adreslerini onaylaması zorunludur. Onay bağlantıları 30 dakika geçerlidir ve tek kullanımlıktır; onaylanmamış hesaplar oturum açamaz. E-postayla parola kurtarma henüz yoktur. Oturum içinden mevcut parola doğrulanarak parola değiştirilebilir.
 
 ## Yerel geliştirme ve doğrulama
 

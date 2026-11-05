@@ -1,3 +1,4 @@
+import { isEmailVerificationRequired } from '@/lib/email-verification-policy'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import BrandLogo from '@/components/brand/BrandLogo'
@@ -11,8 +12,12 @@ export default function VerifyEmailPage() {
       <section className={styles.card}>
         <Link href="/" className={styles.brand}><BrandLogo className={styles.brandLogo} /></Link>
         <h1>E-posta adresinizi onaylayın</h1>
-        <p className={styles.intro}>Hesabınızı kullanmaya başlamak için e-postanızdaki bağlantıyı açıp onaylayın. Bağlantı 30 dakika geçerlidir.</p>
-        <EmailVerificationForm />
+        {isEmailVerificationRequired() ? (
+          <>
+            <p className={styles.intro}>Hesabınızı kullanmaya başlamak için e-postanızdaki bağlantıyı açıp onaylayın. Bağlantı 30 dakika geçerlidir.</p>
+            <EmailVerificationForm />
+          </>
+        ) : <p className={styles.intro}>E-posta onayı şu anda gerekli değil. Hesabınızla giriş yapabilirsiniz.</p>}
         <p className={styles.switch}><Link href="/giris">Giriş sayfasına dön</Link></p>
       </section>
     </main>
