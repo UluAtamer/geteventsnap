@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" fill="none">
+  <defs><linearGradient id="bg" x1="77" y1="57" x2="1115" y2="691" gradientUnits="userSpaceOnUse"><stop stop-color="#D9E3D0"/><stop offset=".52" stop-color="#B4C3A5"/><stop offset="1" stop-color="#718D78"/></linearGradient><linearGradient id="cloth" x1="200" y1="385" x2="998" y2="649" gradientUnits="userSpaceOnUse"><stop stop-color="#FAF2DF"/><stop offset="1" stop-color="#D8C9AA"/></linearGradient></defs>
+  <path fill="url(#bg)" d="M0 0h1200v720H0z"/>
+  <circle cx="891" cy="156" r="101" fill="#F6E8BF" fill-opacity=".73"/>
+  <path d="M0 513c142-54 264-70 409-12 125 49 242 34 369-18 168-68 269-30 422 10v227H0V513Z" fill="#819675"/>
+  <g><path d="M117 0v186m56-186v207M1078 0v193m54-193v215" stroke="#526B56" stroke-width="11" stroke-linecap="round"/><g fill="#70896B"><ellipse cx="86" cy="92" rx="36" ry="17" transform="rotate(-34 86 92)"/><ellipse cx="206" cy="115" rx="36" ry="17" transform="rotate(34 206 115)"/><ellipse cx="1041" cy="104" rx="38" ry="18" transform="rotate(-31 1041 104)"/><ellipse cx="1172" cy="113" rx="40" ry="18" transform="rotate(37 1172 113)"/></g></g>
+  <path d="M180 473c139-117 250-162 418-162s278 45 422 162l-63 54H243l-63-54Z" fill="#F4E8D0"/><path d="M237 520h724l-77 156H314l-77-156Z" fill="url(#cloth)"/><path d="M414 486c82-58 283-61 371 0l-18 30H433l-19-30Z" fill="#C68C6B"/><ellipse cx="599" cy="475" rx="128" ry="30" fill="#F7E5CA"/>
+  <g fill="#B96657"><circle cx="535" cy="445" r="19"/><circle cx="562" cy="435" r="18"/><circle cx="589" cy="448" r="18"/><circle cx="618" cy="433" r="19"/><circle cx="648" cy="446" r="18"/></g>
+  <g fill="#E8D299"><circle cx="400" cy="469" r="17"/><circle cx="420" cy="453" r="17"/><circle cx="439" cy="469" r="17"/><circle cx="420" cy="485" r="17"/><circle cx="420" cy="469" r="8"/><circle cx="765" cy="464" r="17"/><circle cx="784" cy="448" r="17"/><circle cx="803" cy="464" r="17"/><circle cx="784" cy="480" r="17"/><circle cx="784" cy="464" r="8"/></g>
+  <path d="M0 664c179-50 317 10 460 26 139 15 233-34 358-36 163-4 258 47 382 33v33H0v-56Z" fill="#59745F" fill-opacity=".75"/>
+</svg>

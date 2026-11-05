@@ -1,0 +1,209 @@
+.share {
+  margin: 18px 20px 20px;
+  padding: 17px;
+  border: 1px solid #f0e3e5;
+  border-radius: 11px;
+  background: #fffbfa;
+}
+
+.printPortal {
+  display: none;
+}
+
+.printCard {
+  display: grid;
+  min-height: 220px;
+  justify-items: center;
+  gap: 7px;
+  padding: 18px;
+  border: 1px dashed #d9bfc4;
+  border-radius: 10px;
+  background: #fff;
+  text-align: center;
+}
+
+.printEyebrow {
+  margin: 0;
+  color: #81213d;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .16em;
+}
+
+.printTitle {
+  color: #342126;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+}
+
+.printDetails,
+.printAddress {
+  max-width: 100%;
+  margin: 0;
+  color: #514541;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.qr {
+  width: 138px;
+  height: 138px;
+  object-fit: contain;
+}
+
+.qrLoading {
+  display: grid;
+  width: 138px;
+  height: 138px;
+  place-items: center;
+  color: #75666a;
+  font-size: 12px;
+}
+
+.printPrompt {
+  margin: 0;
+  color: #75666a;
+  font-size: 11px;
+}
+
+.linkLabel {
+  margin: 14px 0 5px;
+  color: #75666a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.eventLink {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #81213d;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.actions button,
+.actions a {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.secondary {
+  border: 1px solid #e6d7da;
+  background: #fff;
+  color: #65172f;
+}
+
+.primary {
+  border: 1px solid #81213d;
+  background: #81213d;
+  color: white;
+}
+
+.primary:disabled {
+  opacity: .5;
+  cursor: wait;
+}
+
+.error {
+  margin: 0 0 10px;
+  color: #a32132;
+  font-size: 12px;
+}
+
+.printOrnament {
+  color: #b58a96;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.printBrand {
+  margin: 4px 0 0;
+  color: #81213d;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  .printPortal {
+    border: 0;
+    background: white;
+  }
+
+  .printPortal .printCard {
+    box-sizing: border-box;
+    width: 180mm;
+    height: 267mm;
+    min-height: 0;
+    align-content: center;
+    gap: 7mm;
+    padding: 18mm 16mm;
+    border: 1.2mm double #81213d;
+    border-radius: 0;
+    background: linear-gradient(180deg, #fffaf8, #fbe8ee);
+    break-inside: avoid;
+  }
+
+  .printPortal .printEyebrow {
+    font-size: 13pt;
+  }
+
+  .printPortal .printOrnament {
+    font-size: 30pt;
+  }
+
+  .printPortal .printTitle {
+    font-size: 40pt;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .printPortal .printDetails,
+  .printPortal .printAddress {
+    max-width: 130mm;
+    font-size: 15pt;
+  }
+
+  .printPortal .qr {
+    width: 90mm;
+    height: 90mm;
+    padding: 5mm;
+    border-radius: 4mm;
+    background: #fff;
+    box-shadow: 0 0 0 .4mm #e5c9d1;
+  }
+
+  .printPortal .printPrompt {
+    color: #5e4348;
+    font-size: 15pt;
+    line-height: 1.5;
+  }
+
+  .printPortal .printBrand {
+    margin-top: 6mm;
+    font-size: 18pt;
+  }
+}

@@ -1,0 +1,154 @@
+.page {
+  min-height: 100svh;
+  padding: 0 20px 70px;
+  background: linear-gradient(145deg, #fffaf8, #fff 58%, #f8eeee);
+}
+
+.header {
+  display: flex;
+  width: min(100%, 1020px);
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin: 0 auto;
+  border-bottom: 1px solid #efdfdf;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #65172f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.brandLogo {
+  display: block;
+  width: 170px;
+  height: 105px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.brandMark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: #81213d;
+  color: #fff;
+}
+
+.back {
+  color: #65172f;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.content {
+  width: min(100%, 790px);
+  margin: 0 auto;
+  padding: 55px 0;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #81213d;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .13em;
+}
+
+.content h1 {
+  margin: 14px 0 24px;
+  color: #342126;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(39px, 7vw, 58px);
+  font-weight: 500;
+  line-height: 1.08;
+}
+
+.notice {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 36px;
+  padding: 18px;
+  border: 1px solid #e3bf84;
+  border-radius: 12px;
+  background: #fff5df;
+  color: #51422a;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.notice strong {
+  color: #6c4817;
+}
+
+.content section {
+  margin: 28px 0;
+}
+
+.content h2 {
+  margin: 0 0 10px;
+  color: #342126;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 27px;
+  font-weight: 600;
+}
+
+.content section p {
+  margin: 9px 0;
+  color: #514541;
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+.updated {
+  margin: 35px 0 20px;
+  color: #62585a;
+  font-size: 14px;
+}
+
+.primary {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 17px;
+  border-radius: 9px;
+  background: #81213d;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 750;
+}
+
+@media (max-width: 560px) {
+  .page {
+    padding: 0 17px 45px;
+  }
+
+  .header {
+    min-height: 68px;
+  }
+
+  .brand {
+    font-size: 19px;
+  }
+
+  .back {
+    font-size: 14px;
+  }
+
+  .content {
+    padding-top: 38px;
+  }
+
+  .content section p {
+    font-size: 16px;
+  }
+}
