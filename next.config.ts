@@ -3,6 +3,8 @@ import type { NextConfig } from 'next'
 const nextConfig: NextConfig = {
   output: 'standalone',
   serverExternalPackages: ['mysql2', 'nodemailer'],
+  // Migrations are read at server start (src/instrumentation.ts), so the standalone output must carry them.
+  outputFileTracingIncludes: { '/**': ['./db/mysql-migrations/**'] },
   async headers() {
     return [
       {
