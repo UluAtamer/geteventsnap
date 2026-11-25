@@ -1,4 +1,4 @@
-import pg from 'pg'
+import { connect } from './mysql-client.mjs'
 import { randomBytes, randomUUID, timingSafeEqual, scrypt } from 'node:crypto'
 import { promisify } from 'node:util'
 import { pathToFileURL } from 'node:url'
@@ -16,7 +16,6 @@ export async function seedUser(client, environment = process.env) {
 
   await client.query('BEGIN')
   try {
-    await client.query('SELECT pg_advisory_xact_lock(726283902)')
     const existing = await client.query('SELECT id, password_hash, is_admin, email_verified_at FROM users WHERE lower(email)=$1 FOR UPDATE', [email])
     if (existing.rows.length) {
       const user = existing.rows[0]
@@ -28,7 +27,7 @@ export async function seedUser(client, environment = process.env) {
         if (algorithm !== 'scrypt' || expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
           throw new Error('Yönetici yetkisi için mevcut hesap parolası doğrulanamadı.')
         }
-        await client.query('UPDATE users SET is_admin=TRUE, email_verified_at=COALESCE(email_verified_at,$2) WHERE id=$1', [user.id, new Date().toISOString()])
+        await client.query('UPDATE users SET is_admin=1, email_verified_at=COALESCE(email_verified_at,$2) WHERE id=$1', [user.id, new Date().toISOString()])
         await client.query('COMMIT')
         return 'promoted'
       }
@@ -64,15 +63,15 @@ async function main() {
     process.exitCode = 1
     return
   }
-  const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10000 })
+  let client
   try {
-    await client.connect()
+    client = await connect()
     const result = await seedUser(client)
     console.log(result === 'created' ? 'İlk kurulum kullanıcısı oluşturuldu.' : result === 'promoted' ? 'İlk kurulum hesabına yönetici yetkisi verildi.' : 'İlk kurulum kullanıcısı mevcut; hesap değiştirilmedi.')
   } catch {
     console.error('İlk kurulum kullanıcısı oluşturulamadı. Seed environment ayarlarını ve veritabanı bağlantısını kontrol edin.')
     process.exitCode = 1
-  } finally { await client.end() }
+  } finally { await client?.end().catch(() => {}) }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main()

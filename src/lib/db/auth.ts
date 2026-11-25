@@ -33,8 +33,8 @@ export async function createSession(userId: string) {
   await db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now())
   const session = await db.prepare(`INSERT INTO sessions(token_hash,user_id,expires_at)
     SELECT ?,id,? FROM users WHERE id=? AND (email_verified_at IS NOT NULL OR ?)
-    AND (banned_until IS NULL OR banned_until < ?) RETURNING user_id`).get(tokenHash(token), Date.now() + SESSION_SECONDS * 1000, userId, !isEmailVerificationRequired(), new Date().toISOString())
-  if (!session) throw new Error('Doğrulanmış bir hesap gerekiyor.')
+    AND (banned_until IS NULL OR banned_until < ?)`).run(tokenHash(token), Date.now() + SESSION_SECONDS * 1000, userId, !isEmailVerificationRequired(), new Date().toISOString())
+  if (!session.rowCount) throw new Error('Doğrulanmış bir hesap gerekiyor.')
   return token
 }
 export async function revokeSession(token?: string) {
@@ -45,8 +45,8 @@ export async function register(email: string, password: string) {
   const hash = await hashPassword(password)
   const now = new Date().toISOString()
   const created = await transaction(async client => {
-    const result = await client.query('INSERT INTO users(id,email,password_hash,created_at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id', [id, email, hash, now])
-    if (!result.rows.length) return false
+    const result = await client.query('INSERT INTO users(id,email,password_hash,created_at) VALUES ($1,$2,$3,$4) ON DUPLICATE KEY UPDATE id=id', [id, email, hash, now])
+    if (!result.rowCount) return false
     await client.query('INSERT INTO profiles(id,created_at) VALUES ($1,$2)', [id, now])
     return true
   })

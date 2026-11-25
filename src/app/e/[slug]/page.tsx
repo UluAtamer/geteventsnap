@@ -23,10 +23,10 @@ export default async function GuestEventPage({ params }: { params: Promise<{ slu
   // Owner names and event details never enter guest HTML or RSC props; the cover is only a preset path or a slug-scoped address.
   const event = await database().prepare(`SELECT event_date,dating_enabled,
     CASE WHEN cover_image_url LIKE '/covers/%' THEN cover_image_url END AS preset_cover,
-    coalesce(cover_image_url LIKE '/api/covers/%', false) AS has_uploaded_cover
+    coalesce(cover_image_url LIKE '/api/covers/%', 0) AS has_uploaded_cover
     FROM events WHERE slug=?`).get(slug)
   if (!event) notFound()
-  const cover = guestCoverSource(slug, event.preset_cover, event.has_uploaded_cover)
+  const cover = guestCoverSource(slug, event.preset_cover, Number(event.has_uploaded_cover) === 1)
   return (
     <main className={styles.page}>
       <section className={styles.card}>

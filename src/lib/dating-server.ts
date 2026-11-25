@@ -127,9 +127,10 @@ export async function createDatingProfile(request: Request, event: Row, token: s
     const count = await client.query('SELECT count(*) AS count FROM guest_profiles WHERE event_id=$1', [event.id])
     if (Number(count.rows[0].count) >= 200) throw new DatingError('Etkinliğin Tanışma katılım sınırına ulaşıldı.', 409)
     const now = new Date().toISOString()
-    const result = await client.query(`INSERT INTO guest_profiles(id,event_id,guest_token_hash,first_name,age,bio,contact_type,contact_value,photo_type,photo_content,consented_at,created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11) RETURNING id,first_name,age,bio`, [randomUUID(),event.id,hashGuestToken(token),firstName,age,bio,contactType,contactValue || null,photo.type,bytes,now])
-    return result.rows[0]
+    const id = randomUUID()
+    await client.query(`INSERT INTO guest_profiles(id,event_id,guest_token_hash,first_name,age,bio,contact_type,contact_value,photo_type,photo_content,consented_at,created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`, [id,event.id,hashGuestToken(token),firstName,age,bio,contactType,contactValue || null,photo.type,bytes,now])
+    return { id, first_name: firstName, age, bio }
   })
 }
 
@@ -144,14 +145,14 @@ export async function interact(event: Row, own: Row, targetId: string, action: '
     const [a,b] = [own.id,targetId].sort()
     if (action === 'remove') await client.query('DELETE FROM dating_likes WHERE event_id=$1 AND liker_profile_id=$2 AND liked_profile_id=$3', [event.id,own.id,targetId])
     else await client.query(`INSERT INTO dating_likes(event_id,liker_profile_id,liked_profile_id,liked) VALUES ($1,$2,$3,$4)
-      ON CONFLICT(event_id,liker_profile_id,liked_profile_id) DO UPDATE SET liked=excluded.liked`, [event.id,own.id,targetId,action === 'like'])
+      ON DUPLICATE KEY UPDATE liked=VALUES(liked)`, [event.id,own.id,targetId,action === 'like'])
     if (action !== 'like') {
       await client.query('DELETE FROM dating_matches WHERE event_id=$1 AND profile_a=$2 AND profile_b=$3', [event.id,a,b])
       return { matched: false }
     }
     const reciprocal = await client.query('SELECT 1 FROM dating_likes WHERE event_id=$1 AND liker_profile_id=$2 AND liked_profile_id=$3 AND liked=TRUE', [event.id,targetId,own.id])
     if (!reciprocal.rows.length) return { matched: false }
-    await client.query('INSERT INTO dating_matches(event_id,profile_a,profile_b) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [event.id,a,b])
+    await client.query('INSERT INTO dating_matches(event_id,profile_a,profile_b) VALUES ($1,$2,$3) ON DUPLICATE KEY UPDATE profile_a=profile_a', [event.id,a,b])
     return { matched: true, match: participantProfile(target,slug,true) }
   })
 }
@@ -164,7 +165,7 @@ export async function protectParticipant(event: Row, own: Row, targetId: string,
       if (reason.length < 3 || reason.length > 300) throw new DatingError('Bildirim açıklaması 3–300 karakter olmalı.')
       await client.query('INSERT INTO dating_reports(id,event_id,reporter_profile_id,reported_profile_id,reason,created_at) VALUES ($1,$2,$3,$4,$5,$6)', [randomUUID(),event.id,own.id,targetId,reason,new Date().toISOString()])
     } else if (action === 'block') {
-      await client.query('INSERT INTO dating_blocks(event_id,blocker_profile_id,blocked_profile_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [event.id,own.id,targetId])
+      await client.query('INSERT INTO dating_blocks(event_id,blocker_profile_id,blocked_profile_id) VALUES ($1,$2,$3) ON DUPLICATE KEY UPDATE event_id=event_id', [event.id,own.id,targetId])
       await client.query('DELETE FROM dating_likes WHERE event_id=$1 AND ((liker_profile_id=$2 AND liked_profile_id=$3) OR (liker_profile_id=$3 AND liked_profile_id=$2))', [event.id,own.id,targetId])
       const [a,b] = [own.id,targetId].sort()
       await client.query('DELETE FROM dating_matches WHERE event_id=$1 AND profile_a=$2 AND profile_b=$3', [event.id,a,b])

@@ -2,7 +2,7 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  serverExternalPackages: ['pg', 'nodemailer'],
+  serverExternalPackages: ['mysql2', 'nodemailer'],
   async headers() {
     return [
       {

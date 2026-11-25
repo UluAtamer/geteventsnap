@@ -8,8 +8,8 @@ if (existsSync(path)) {
 }
 const password = randomBytes(24).toString('hex')
 writeFileSync(path, `# Local development only. Never commit this file.
-LOCAL_POSTGRES_PASSWORD=${password}
-DATABASE_URL=postgresql://eventsnap:${password}@127.0.0.1:54329/eventsnap
+LOCAL_MYSQL_PASSWORD=${password}
+DATABASE_URL=mysql://eventsnap:${password}@127.0.0.1:33069/eventsnap
 DATABASE_POOL_MAX=10
 SITE_URL=http://localhost:3002
 GOOGLE_CLIENT_ID=

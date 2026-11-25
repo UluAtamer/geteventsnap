@@ -6,21 +6,20 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import ts from 'typescript'
 
-// Production SQL runs against an isolated PostgreSQL engine, without a network or production credentials.
+// Production SQL runs against a disposable local MySQL/MariaDB database, never production credentials.
+// Start one with: docker run -d -p 127.0.0.1:33061:3306 -e MARIADB_ROOT_PASSWORD=testonly mariadb:11.4
 const directory = mkdtempSync(join(tmpdir(), 'eventsnap-private-'))
-const pgliteUrl = pathToFileURL(resolve('node_modules/@electric-sql/pglite/dist/index.js')).href
-writeFileSync(join(directory, 'pg-test-adapter.mjs'), `
-  import { PGlite } from ${JSON.stringify(pgliteUrl)};
-  export const engine = new PGlite();
-  class Pool {
-    on() {}
-    async query(sql, args) { if (sql.includes(';') && !args?.length) { await engine.exec(sql); return { rows: [] }; } return engine.query(sql, args); }
-    async connect() { return { query: this.query.bind(this), release() {} }; }
-    async end() {}
-  }
-  export default { Pool, Client: Pool };
-`)
-process.env.DATABASE_URL = 'postgresql://unused/isolated-test'
+const serverUrl = new URL(process.env.TEST_DATABASE_URL || 'mysql://root:testonly@127.0.0.1:33061/')
+if (!['127.0.0.1', 'localhost', '[::1]'].includes(serverUrl.hostname)) throw new Error('TEST_DATABASE_URL must point to a local database.')
+const testDatabase = `eventsnap_test_${process.pid}`
+const { connect } = await import('../scripts/mysql-client.mjs')
+const admin = await connect(serverUrl.toString(), { multipleStatements: true })
+await admin.query(`DROP DATABASE IF EXISTS \`${testDatabase}\`; CREATE DATABASE \`${testDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_bin`)
+serverUrl.pathname = `/${testDatabase}`
+process.env.DATABASE_URL = serverUrl.toString()
+const engine = await connect(process.env.DATABASE_URL, { multipleStatements: true })
+engine.exec = sql => engine.query(sql)
+engine.close = async () => { await engine.end(); await admin.query(`DROP DATABASE IF EXISTS \`${testDatabase}\``); await admin.end() }
 process.env.EMAIL_VERIFICATION_REQUIRED = 'true'
 writeFileSync(join(directory, 'verification-policy.mjs'), ts.transpileModule(readFileSync('src/lib/email-verification-policy.ts','utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
 writeFileSync(join(directory, 'ui-preview.mjs'), ts.transpileModule(readFileSync('src/lib/ui-preview.ts', 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
@@ -30,17 +29,12 @@ for (const name of ['core', 'auth', 'email-verification']) {
     .replace("from './auth'", "from './auth.mjs'")
     .replace("from '../ui-preview'", "from './ui-preview.mjs'")
     .replace("from '../email-verification-policy'", "from './verification-policy.mjs'")
-    .replace("from 'pg'", "from './pg-test-adapter.mjs'")
+    .replace("from 'mysql2/promise'", `from ${JSON.stringify(pathToFileURL(resolve('node_modules/mysql2/promise.js')).href)}`)
   writeFileSync(join(directory, `${name}.mjs`), ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
 }
-const { engine } = await import(pathToFileURL(join(directory, 'pg-test-adapter.mjs')).href)
-await engine.exec('CREATE TABLE schema_migrations(version text PRIMARY KEY, checksum text NOT NULL)')
 try {
-  await engine.exec(readFileSync('db/migrations/001_initial.sql', 'utf8'))
-  await engine.exec(readFileSync('db/migrations/002_admin_role.sql', 'utf8'))
-  await engine.exec(readFileSync('db/migrations/003_drive_token_format.sql', 'utf8'))
-  await engine.exec(readFileSync('db/migrations/004_email_verification.sql', 'utf8'))
-  await engine.exec(readFileSync('db/migrations/005_restore_dating.sql', 'utf8'))
+  await engine.exec(readFileSync('db/mysql-migrations/001_initial.sql', 'utf8'))
+  await engine.exec('CREATE TABLE schema_migrations(version VARCHAR(191) PRIMARY KEY, checksum CHAR(64) NOT NULL, applied_at VARCHAR(40) NOT NULL)')
 } catch (error) { throw new Error(error.message) }
 const { database, Query, rpc, consumeRateLimit } = await import(pathToFileURL(join(directory, 'core.mjs')).href)
 const { register: registerPending, login, createSession, userForSession, revokeSession, changePassword, userAdmin } = await import(pathToFileURL(join(directory, 'auth.mjs')).href)
@@ -273,12 +267,10 @@ test('guest cover route serves only the invited event cover, without owner ident
 
 test('deployment migration runner is repeatable and tracks the applied schema', async () => {
   mkdirSync(join(directory, 'scripts'))
-  mkdirSync(join(directory, 'db', 'migrations'), { recursive: true })
-  for (const version of ['001_initial.sql', '002_admin_role.sql', '003_drive_token_format.sql', '004_email_verification.sql', '005_restore_dating.sql']) {
-    writeFileSync(join(directory, 'db', 'migrations', version), readFileSync(`db/migrations/${version}`))
-  }
-  const source = readFileSync('scripts/migrate.mjs', 'utf8').replace("from 'pg'", "from '../pg-test-adapter.mjs'")
-  writeFileSync(join(directory, 'scripts', 'migrate.mjs'), source)
+  mkdirSync(join(directory, 'db', 'mysql-migrations'), { recursive: true })
+  writeFileSync(join(directory, 'db', 'mysql-migrations', '001_initial.sql'), readFileSync('db/mysql-migrations/001_initial.sql'))
+  writeFileSync(join(directory, 'scripts', 'mysql-client.mjs'), readFileSync('scripts/mysql-client.mjs'))
+  writeFileSync(join(directory, 'scripts', 'migrate.mjs'), readFileSync('scripts/migrate.mjs', 'utf8').replace("'./mysql-client.mjs'", JSON.stringify(pathToFileURL(resolve('scripts/mysql-client.mjs')).href)))
   const migrationUrl = pathToFileURL(join(directory, 'scripts', 'migrate.mjs')).href
   const messages = []
   const originalLog = console.log
@@ -287,19 +279,19 @@ test('deployment migration runner is repeatable and tracks the applied schema', 
     await import(migrationUrl + '?first')
     await import(migrationUrl + '?second')
   } finally { console.log = originalLog }
-  assert.equal(messages.filter(message => message === '[Veritabanı] PostgreSQL bağlantısı başarıyla kuruldu.').length, 2)
+  assert.equal(messages.filter(message => message === '[Veritabanı] MySQL bağlantısı başarıyla kuruldu.').length, 2)
   assert.equal(messages.filter(message => message === '[Veritabanı] Şema kontrolü tamamlandı; veritabanı hazır.').length, 2)
   assert.ok(!messages.join('\n').includes(process.env.DATABASE_URL))
   assert.equal(process.exitCode || 0, 0)
   const versions = await database().prepare('SELECT version FROM schema_migrations ORDER BY version').all()
-  assert.deepEqual(versions.map(row => row.version), ['001_initial.sql', '002_admin_role.sql', '003_drive_token_format.sql', '004_email_verification.sql', '005_restore_dating.sql'])
+  assert.deepEqual(versions.map(row => row.version), ['001_initial.sql'])
 })
 
 test('first-deployment seed is opt-in, hashed and never resets an existing account password', async () => {
   const { seedUser } = await import('../scripts/seed-user.mjs')
   assert.equal(await seedUser({ query() { throw new Error('No database call expected') } }, {}), 'disabled')
   const settings = { SEED_USER_ENABLED: 'true', SEED_USER_EMAIL: 'Bootstrap@Example.Test', SEED_USER_PASSWORD: 'Temporary-bootstrap-4321' }
-  const client = { query: engine.query.bind(engine) }
+  const client = engine
   await assert.rejects(seedUser(client, { ...settings, SEED_USER_PASSWORD: 'short' }))
   assert.equal(await seedUser(client, settings), 'created')
   const user = await login('bootstrap@example.test', settings.SEED_USER_PASSWORD)
@@ -322,7 +314,7 @@ test('first-deployment seed is opt-in, hashed and never resets an existing accou
 
 test('seed administrator role requires explicit opt-in and the current password for promotion', async () => {
   const { seedUser } = await import('../scripts/seed-user.mjs')
-  const client = { query: engine.query.bind(engine) }
+  const client = engine
   const config = { SEED_USER_ENABLED: 'true', SEED_USER_IS_ADMIN: 'true', SEED_USER_EMAIL: 'first-admin@example.test', SEED_USER_PASSWORD: password }
   assert.equal(await seedUser(client, config), 'created')
   const admin = await login(config.SEED_USER_EMAIL, password)

@@ -27,7 +27,7 @@ export async function confirmEmail(token: string) {
   if (!/^[a-f0-9]{64}$/.test(token)) return null
   return transaction(async client => {
     const { rows } = await client.query(`SELECT u.* FROM users u JOIN email_verifications v ON v.user_id=u.id
-      WHERE v.token_hash=$1 AND v.expires_at>$2 FOR UPDATE OF u`, [tokenHash(token), Date.now()])
+      WHERE v.token_hash=$1 AND v.expires_at>$2 FOR UPDATE`, [tokenHash(token), Date.now()])
     const user = rows[0]
     if (!user || user.email_verified_at || (user.banned_until && user.banned_until > new Date().toISOString())) return null
     const now = new Date().toISOString()

@@ -47,7 +47,7 @@ export async function PUT(request: NextRequest, context: Context) {
   const db = database()
   const usage = await db.prepare('SELECT coalesce(sum(length(content)),0) AS size FROM covers WHERE owner_id=?').get(access.user.id)
   if (Number(usage?.size) + size > 50 * 1024 * 1024) return new NextResponse(null, { status: 413, headers })
-  await db.prepare('INSERT INTO covers(path,owner_id,content_type,content) VALUES (?,?,?,?) ON CONFLICT(path) DO NOTHING').run(access.path, access.user.id, contentType, content)
+  await db.prepare('INSERT INTO covers(path,owner_id,content_type,content) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE path=path').run(access.path, access.user.id, contentType, content)
   return NextResponse.json({ success: true }, { headers })
 }
 export async function DELETE(request: NextRequest, context: Context) {

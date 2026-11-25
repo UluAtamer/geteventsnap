@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 
 const settings = {
-  DATABASE_URL: 'postgresql://app:test-only-password@internal-db:5432/eventsnap',
+  DATABASE_URL: 'mysql://app:test-only-password@127.0.0.1:3306/eventsnap',
   SITE_URL: 'https://example.invalid',
   GOOGLE_CLIENT_ID: 'test-only-client-id',
   GOOGLE_CLIENT_SECRET: 'test-only-client-secret',
