@@ -31,6 +31,7 @@
   margin: calc(clamp(28px, 7vw, 52px) * -1) calc(clamp(28px, 7vw, 52px) * -1) 0;
   padding: 32px clamp(24px, 7vw, 64px);
   border-bottom: 1px solid rgba(255, 255, 255, .7);
+  background-color: #3a1f2b;
   background-position: center;
   background-size: cover;
   color: #fff;

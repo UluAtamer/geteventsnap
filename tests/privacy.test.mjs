@@ -223,12 +223,15 @@ test('guest HTML and client props omit event names, addresses, email and private
   await new Query('events', owner.id, false).insert(privateDetails)
   const windowSource = readFileSync('src/lib/event-upload-window.ts', 'utf8')
   writeFileSync(join(directory, 'window.mjs'), ts.transpileModule(windowSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
+  writeFileSync(join(directory, 'cover-url.mjs'), ts.transpileModule(readFileSync('src/lib/cover-url.ts', 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText)
   let page = readFileSync('src/app/e/[slug]/page.tsx', 'utf8')
+    .replace("import Link from 'next/link'", "function Link(props) { return React.createElement('a', props) }")
     .replace("import { notFound } from 'next/navigation'", "function notFound() { throw new Error('not found') }")
     .replace("import DatingModule from '@/components/events/DatingModule'", "function DatingModule(props) { return React.createElement('div', { 'data-dating-enabled': props.enabled }) }")
     .replace("import GuestUploadForm from '@/components/events/GuestUploadForm'", "function GuestUploadForm(props) { return React.createElement('div', { 'data-client-props': JSON.stringify(props) }) }")
     .replace("import { getGuestUploadLimits } from '@/lib/guest-upload'", "function getGuestUploadLimits() { return { photoBytes: 10, videoBytes: 20 } }")
     .replace("from '@/lib/event-upload-window'", "from './window.mjs'")
+    .replace("from '@/lib/cover-url'", "from './cover-url.mjs'")
     .replace("from '@/lib/db/core'", "from './core.mjs'")
     .replace("from '@/lib/ui-preview'", "from './ui-preview.mjs'")
     .replace("from '@/lib/email-verification-policy'", "from './verification-policy.mjs'")
@@ -241,6 +244,31 @@ test('guest HTML and client props omit event names, addresses, email and private
     assert.ok(!html.includes(secret), `guest output must omit ${secret}`)
     assert.ok(!JSON.stringify(module.metadata).includes(secret))
   }
+  assert.ok(html.includes(`/api/events/${privateDetails.slug}/cover`), 'uploaded cover is referenced by its slug-scoped address')
+})
+
+test('guest cover route serves only the invited event cover, without owner identity or caching', async () => {
+  const { NextRequest } = await import('next/server.js')
+  const cover = await loadRoute('src/app/api/events/[slug]/cover/route.ts', 'guest-cover-route')
+  const owner = await register('cover-owner@example.test', password)
+  const other = await register('cover-other@example.test', password)
+  const path = `${owner.id}/12345678-1234-1234-1234-1234567890ab.png`
+  const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1])
+  await database().prepare('INSERT INTO covers VALUES (?,?,?,?)').run(path, owner.id, 'image/png', png)
+  const event = { owner_id: owner.id, title: 'Cover event', event_date: '2026-11-05', cover_image_url: `/api/covers/${path}` }
+  await new Query('events', owner.id, false).insert({ ...event, slug: 'covered-event' })
+  await new Query('events', owner.id, false).insert({ ...event, slug: 'preset-event', cover_image_url: '/covers/dugun.svg' })
+  await new Query('events', other.id, false).insert({ ...event, owner_id: other.id, slug: 'forged-event' })
+  const get = slug => cover.GET(new NextRequest(`http://internal-container:3000/api/events/${slug}/cover`), { params: Promise.resolve({ slug }) })
+  const served = await get('covered-event')
+  assert.equal(served.status, 200)
+  assert.equal(served.headers.get('content-type'), 'image/png')
+  assert.equal(served.headers.get('cache-control'), 'private, no-store')
+  assert.deepEqual(Buffer.from(await served.arrayBuffer()), png)
+  assert.equal((await get('unknown-event')).status, 404)
+  assert.equal((await get('preset-event')).status, 404)
+  // An event may not reference a cover that belongs to a different account.
+  assert.equal((await get('forged-event')).status, 404)
 })
 
 test('deployment migration runner is repeatable and tracks the applied schema', async () => {
